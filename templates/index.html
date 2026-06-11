@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Proventos</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f5f7fa;
+      color: #1a1a2e;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #16213e;
+      color: #e2e8f0;
+      padding: 1.2rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    header h1 { font-size: 1.3rem; font-weight: 600; letter-spacing: .02em; }
+    header span { font-size: .85rem; color: #94a3b8; }
+
+    main { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+    /* ── Form card ─────────────────────────────────── */
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .card h2 { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: #334155; }
+
+    .form-row { display: flex; gap: .75rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 1rem; }
+    .form-group { display: flex; flex-direction: column; gap: .3rem; }
+    .form-group label { font-size: .8rem; font-weight: 500; color: #64748b; text-transform: uppercase; letter-spacing: .04em; }
+    .form-group input, .form-group select {
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: .45rem .75rem;
+      font-size: .9rem;
+      outline: none;
+      transition: border-color .15s;
+    }
+    .form-group input:focus, .form-group select:focus { border-color: #6366f1; }
+    .form-group input[type="text"] { width: 130px; text-transform: uppercase; }
+    .form-group input[type="number"] { width: 110px; }
+
+    .btn {
+      border: none; border-radius: 6px; padding: .48rem 1rem;
+      font-size: .88rem; font-weight: 500; cursor: pointer;
+      transition: background .15s, opacity .15s;
+    }
+    .btn-add    { background: #6366f1; color: #fff; }
+    .btn-add:hover    { background: #4f46e5; }
+    .btn-search { background: #0f172a; color: #fff; padding: .55rem 1.4rem; font-size: .95rem; }
+    .btn-search:hover { background: #1e293b; }
+    .btn-search:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-remove { background: none; border: none; color: #94a3b8; font-size: 1.1rem; cursor: pointer; padding: 0 .25rem; }
+    .btn-remove:hover { color: #ef4444; }
+
+    /* ── Ticker chips ─────────────────────────────── */
+    #ticker-list { display: flex; flex-wrap: wrap; gap: .5rem; min-height: 2rem; }
+    .chip {
+      background: #f1f5f9; border: 1px solid #e2e8f0;
+      border-radius: 20px; padding: .3rem .75rem;
+      font-size: .85rem; display: flex; align-items: center; gap: .4rem;
+    }
+    .chip .ticker-label { font-weight: 600; color: #334155; }
+    .chip .qtd-label    { color: #64748b; font-size: .8rem; }
+
+    /* ── Status / error ───────────────────────────── */
+    #status { font-size: .88rem; color: #64748b; min-height: 1.5rem; }
+    .error-box {
+      background: #fef2f2; border: 1px solid #fca5a5;
+      border-radius: 8px; padding: .75rem 1rem;
+      font-size: .88rem; color: #b91c1c; margin-bottom: 1rem;
+    }
+
+    /* ── Results ──────────────────────────────────── */
+    #results { }
+    .result-section { margin-bottom: 2rem; }
+    .result-title {
+      font-size: 1rem; font-weight: 600; color: #334155;
+      margin-bottom: .75rem;
+      display: flex; align-items: center; gap: .5rem;
+    }
+    .badge {
+      font-size: .72rem; font-weight: 600; border-radius: 4px;
+      padding: .15rem .4rem; text-transform: uppercase; letter-spacing: .04em;
+    }
+    .badge-fii  { background: #dbeafe; color: #1d4ed8; }
+    .badge-acao { background: #dcfce7; color: #166534; }
+
+    /* ── Table base ───────────────────────────────── */
+    .tbl-wrap { overflow-x: auto; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.07); }
+    table { border-collapse: collapse; width: 100%; font-size: .84rem; background: #fff; }
+    th {
+      background: #1e293b; color: #e2e8f0;
+      padding: .55rem .8rem; text-align: left; font-weight: 500;
+      white-space: nowrap;
+    }
+    td { padding: .45rem .8rem; border-bottom: 1px solid #f1f5f9; white-space: nowrap; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f8fafc; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+    .subtotal-row td { color: #64748b; font-style: italic; background: #fafafa; }
+    .subtotal-row td:first-child { padding-left: 2rem; }
+    .month-total-row td { font-weight: 600; background: #f8fafc; }
+
+    .total-row td {
+      background: #1e293b; color: #f1f5f9;
+      font-weight: 600; border-bottom: none;
+    }
+    .total-label-row td {
+      background: #0f172a; color: #94a3b8;
+      font-size: .8rem; border-bottom: 1px solid #334155;
+    }
+
+    /* empty month */
+    .empty-month td { color: #cbd5e1; }
+
+    /* ── Matrix table ─────────────────────────────── */
+    .matrix-table th:first-child, .matrix-table td:first-child { text-align: left; min-width: 160px; }
+    .matrix-table th:not(:first-child), .matrix-table td:not(:first-child) { text-align: right; min-width: 72px; }
+    .matrix-table .total-col { background: #1e3a5f !important; font-weight: 700; }
+    .matrix-table tfoot td { background: #1e293b; color: #f1f5f9; font-weight: 700; }
+    .matrix-table tfoot td:first-child { background: #0f172a; }
+
+    /* spinner */
+    .spinner {
+      display: inline-block; width: 14px; height: 14px;
+      border: 2px solid #cbd5e1; border-top-color: #6366f1;
+      border-radius: 50%; animation: spin .7s linear infinite;
+      vertical-align: middle; margin-right: .4rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>💰 Proventos</h1>
+    <span>Ações &amp; FIIs · Status Invest</span>
+  </div>
+</header>
+
+<main>
+  <!-- Form -->
+  <div class="card">
+    <h2>Consultar proventos</h2>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Ticker</label>
+        <input id="inp-ticker" type="text" placeholder="PETR4" maxlength="8" />
+      </div>
+      <div class="form-group">
+        <label>Cotas (opcional)</label>
+        <input id="inp-qtd" type="number" placeholder="ex: 200" min="1" />
+      </div>
+      <div class="form-group">
+        <label>&nbsp;</label>
+        <button class="btn btn-add" onclick="addTicker()">+ Adicionar</button>
+      </div>
+      <div class="form-group" style="margin-left:auto">
+        <label>Ano</label>
+        <select id="sel-ano"></select>
+      </div>
+    </div>
+
+    <div id="ticker-list"></div>
+
+    <div style="margin-top:1rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+      <button id="btn-buscar" class="btn btn-search" onclick="buscar()">Consultar</button>
+      <span id="status"></span>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div id="results"></div>
+</main>
+
+<script>
+  // ── State ──────────────────────────────────────────────────────────
+  const ativos = [];   // [{ticker, qtd}]
+
+  // ── Init ───────────────────────────────────────────────────────────
+  const anoAtual = {{ ano }};
+  const sel = document.getElementById('sel-ano');
+  for (let y = anoAtual; y >= anoAtual - 5; y--) {
+    const o = document.createElement('option');
+    o.value = y; o.textContent = y;
+    sel.appendChild(o);
+  }
+
+  document.getElementById('inp-ticker').addEventListener('keydown', e => {
+    if (e.key === 'Enter') addTicker();
+  });
+  document.getElementById('inp-qtd').addEventListener('keydown', e => {
+    if (e.key === 'Enter') addTicker();
+  });
+
+  // ── Ticker list ────────────────────────────────────────────────────
+  function addTicker() {
+    const ticker = document.getElementById('inp-ticker').value.trim().toUpperCase();
+    const qtd    = parseInt(document.getElementById('inp-qtd').value) || 0;
+    if (!ticker) return;
+    if (ativos.find(a => a.ticker === ticker)) {
+      setStatus(`${ticker} já está na lista.`); return;
+    }
+    ativos.push({ ticker, qtd });
+    document.getElementById('inp-ticker').value = '';
+    document.getElementById('inp-qtd').value    = '';
+    renderChips();
+    setStatus('');
+    document.getElementById('inp-ticker').focus();
+  }
+
+  function removeTicker(ticker) {
+    const i = ativos.findIndex(a => a.ticker === ticker);
+    if (i >= 0) ativos.splice(i, 1);
+    renderChips();
+  }
+
+  function renderChips() {
+    const el = document.getElementById('ticker-list');
+    el.innerHTML = ativos.map(a => `
+      <div class="chip">
+        <span class="ticker-label">${a.ticker}</span>
+        ${a.qtd ? `<span class="qtd-label">×${a.qtd.toLocaleString('pt-BR')}</span>` : ''}
+        <button class="btn-remove" onclick="removeTicker('${a.ticker}')" title="Remover">×</button>
+      </div>
+    `).join('');
+  }
+
+  // ── Search ─────────────────────────────────────────────────────────
+  async function buscar() {
+    if (!ativos.length) { setStatus('Adicione ao menos um ticker.'); return; }
+
+    const btn = document.getElementById('btn-buscar');
+    btn.disabled = true;
+    setStatus('<span class="spinner"></span>Consultando Status Invest...');
+    document.getElementById('results').innerHTML = '';
+
+    const ano = parseInt(document.getElementById('sel-ano').value);
+
+    try {
+      const resp = await fetch('/api/proventos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ativos, ano }),
+      });
+      const data = await resp.json();
+      setStatus('');
+      renderResults(data);
+    } catch (err) {
+      setStatus('Erro ao conectar com o servidor.');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────
+  function fmt(v, decimals = 2) {
+    if (v === null || v === undefined) return '—';
+    return v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  }
+
+  function renderResults(data) {
+    const el = document.getElementById('results');
+    let html = '';
+
+    // Errors
+    if (data.erros?.length) {
+      html += `<div class="error-box">`;
+      data.erros.forEach(e => html += `<div>⚠ <b>${e.ticker}</b>: ${e.erro}</div>`);
+      html += `</div>`;
+    }
+
+    if (!data.resultados?.length) { el.innerHTML = html; return; }
+
+    if (data.resultados.length === 1) {
+      html += renderDetalhado(data.resultados[0]);
+    } else {
+      html += renderMatriz(data.resultados, data.meses_curtos, data.ano);
+    }
+
+    el.innerHTML = html;
+  }
+
+  // ── Detailed view ──────────────────────────────────────────────────
+  function renderDetalhado(d) {
+    const comQtd = d.qtd > 0;
+    const badgeClass = d.tipo === 'FII' ? 'badge-fii' : 'badge-acao';
+    const qtdLabel = comQtd ? ` · ${d.qtd.toLocaleString('pt-BR')} cotas` : '';
+
+    let html = `<div class="result-section card">
+      <div class="result-title">
+        ${d.ticker}
+        <span class="badge ${badgeClass}">${d.tipo}</span>
+        <span style="font-weight:400;color:#64748b;font-size:.9rem">${d.ano}${qtdLabel}</span>
+      </div>
+      <div class="tbl-wrap"><table>
+        <thead><tr>
+          <th>Mês</th>
+          <th>Pagamento</th>
+          <th>Data-com</th>
+          <th>Tipo</th>
+          <th class="num">${comQtd ? 'R$/cota' : 'Valor (R$)'}</th>
+          ${comQtd ? '<th class="num">Total (R$)</th>' : ''}
+        </tr></thead>
+        <tbody>`;
+
+    d.meses.forEach(m => {
+      if (!m.grupos.length) {
+        html += `<tr class="empty-month">
+          <td>${m.nome}</td><td>—</td><td></td><td></td><td></td>
+          ${comQtd ? '<td></td>' : ''}
+        </tr>`;
+        return;
+      }
+
+      let firstRow = true;
+      m.grupos.forEach((g, gi) => {
+        g.itens.forEach((item, ii) => {
+          const mesCell  = (firstRow && ii === 0) ? `<td rowspan="${m.grupos.reduce((s,x)=>s+x.itens.length+(x.itens.length>1?1:0),0)+(m.grupos.length>1?1:0)}">${m.nome}</td>` : '';
+          const pgtoCell = ii === 0 ? `<td rowspan="${g.itens.length + (g.itens.length > 1 ? 1 : 0)}">${g.data_pagamento}</td><td rowspan="${g.itens.length + (g.itens.length > 1 ? 1 : 0)}">${g.data_com}</td>` : '';
+          html += `<tr>
+            ${firstRow && ii === 0 ? '' : ''}
+            ${ii === 0 && gi === 0 ? `<td rowspan="999" style="display:none"></td>` : ''}
+            <td>${item.tipo}</td>
+            <td class="num">${fmt(item.valor, 6)}</td>
+            ${comQtd ? `<td class="num">${fmt(item.total)}</td>` : ''}
+          </tr>`;
+          firstRow = false;
+        });
+        if (g.itens.length > 1) {
+          html += `<tr class="subtotal-row">
+            <td>Subtotal</td>
+            <td class="num">${fmt(g.subtotal, 6)}</td>
+            ${comQtd ? `<td class="num">${fmt(g.subtotal_total)}</td>` : ''}
+          </tr>`;
+        }
+      });
+    });
+
+    html += `</tbody></table></div></div>`;
+
+    // Simpler flat table (cleaner)
+    return renderDetalhadoFlat(d);
+  }
+
+  function renderDetalhadoFlat(d) {
+    const comQtd = d.qtd > 0;
+    const badgeClass = d.tipo === 'FII' ? 'badge-fii' : 'badge-acao';
+    const qtdLabel = comQtd ? ` · ${d.qtd.toLocaleString('pt-BR')} cotas` : '';
+
+    let html = `<div class="result-section card">
+      <div class="result-title">
+        ${d.ticker}
+        <span class="badge ${badgeClass}">${d.tipo}</span>
+        <span style="font-weight:400;color:#64748b;font-size:.9rem">${d.ano}${qtdLabel}</span>
+      </div>
+      <div class="tbl-wrap"><table>
+        <thead><tr>
+          <th>Mês</th>
+          <th>Pagamento</th>
+          <th>Data-com</th>
+          <th>Tipo</th>
+          <th class="num">${comQtd ? 'R$/cota' : 'Valor (R$)'}</th>
+          ${comQtd ? '<th class="num">Total (R$)</th>' : ''}
+        </tr></thead>
+        <tbody>`;
+
+    d.meses.forEach(m => {
+      if (!m.grupos.length) {
+        html += `<tr class="empty-month">
+          <td>${m.nome}</td><td colspan="3">—</td><td></td>
+          ${comQtd ? '<td></td>' : ''}
+        </tr>`;
+        return;
+      }
+
+      let mesShown = false;
+      let totalRows = m.grupos.reduce((s, g) => s + g.itens.length + (g.itens.length > 1 ? 1 : 0), 0)
+                    + (m.grupos.length > 1 ? 1 : 0);
+
+      m.grupos.forEach((g, gi) => {
+        g.itens.forEach((item, ii) => {
+          html += `<tr>
+            ${!mesShown ? `<td rowspan="${totalRows}">${m.nome}</td>` : ''}
+            ${ii === 0 ? `<td rowspan="${g.itens.length + (g.itens.length > 1 ? 1 : 0)}">${g.data_pagamento}</td>
+                         <td rowspan="${g.itens.length + (g.itens.length > 1 ? 1 : 0)}">${g.data_com}</td>` : ''}
+            <td>${item.tipo}</td>
+            <td class="num">${fmt(item.valor, 6)}</td>
+            ${comQtd ? `<td class="num">${fmt(item.total)}</td>` : ''}
+          </tr>`;
+          mesShown = true;
+        });
+        if (g.itens.length > 1) {
+          html += `<tr class="subtotal-row">
+            <td colspan="2">Subtotal</td>
+            <td class="num">${fmt(g.subtotal, 6)}</td>
+            ${comQtd ? `<td class="num">${fmt(g.subtotal_total)}</td>` : ''}
+          </tr>`;
+        }
+        if (gi < m.grupos.length - 1) {
+          html += `<tr><td colspan="${comQtd ? 4 : 3}" style="padding:2px;background:#f8fafc"></td></tr>`;
+        }
+      });
+
+      if (m.grupos.length > 1) {
+        html += `<tr class="month-total-row">
+          <td colspan="3">Total ${m.nome}</td>
+          <td class="num">${fmt(m.total_bruto, 6)}</td>
+          ${comQtd ? `<td class="num">${fmt(m.total_reais)}</td>` : ''}
+        </tr>`;
+      }
+    });
+
+    // Footer
+    if (comQtd) {
+      html += `
+        <tr class="total-label-row"><td colspan="4">Total ano (por cota)</td><td class="num">${fmt(d.total_ano_bruto, 6)}</td><td></td></tr>
+        <tr class="total-row"><td colspan="4">Total ano</td><td></td><td class="num">${fmt(d.total_ano_reais)}</td></tr>`;
+    } else {
+      html += `<tr class="total-row"><td colspan="4">Total ano</td><td class="num">${fmt(d.total_ano_bruto, 6)}</td></tr>`;
+    }
+
+    html += `</tbody></table></div></div>`;
+    return html;
+  }
+
+  // ── Matrix view ────────────────────────────────────────────────────
+  function renderMatriz(resultados, mesesCurtos, ano) {
+    const comQtd = resultados.some(d => d.qtd > 0);
+
+    let html = `<div class="result-section card">
+      <div class="result-title">
+        Proventos combinados
+        <span style="font-weight:400;color:#64748b;font-size:.9rem">${ano}${comQtd ? ' · valores em R$ considerando as cotas informadas' : ''}</span>
+      </div>
+      <div class="tbl-wrap"><table class="matrix-table">
+        <thead><tr>
+          <th>Ticker</th>
+          ${mesesCurtos.map(m => `<th class="num">${m}</th>`).join('')}
+          <th class="num total-col">Total</th>
+        </tr></thead>
+        <tbody>`;
+
+    const totaisMes = Array(12).fill(0);
+    let totalGeral = 0;
+
+    resultados.forEach(d => {
+      const badgeClass = d.tipo === 'FII' ? 'badge-fii' : 'badge-acao';
+      const qtdSuffix  = d.qtd ? ` <span style="color:#94a3b8;font-size:.78rem">×${d.qtd.toLocaleString('pt-BR')}</span>` : '';
+      let totalTicker  = 0;
+
+      const cells = Array.from({ length: 12 }, (_, i) => {
+        const m   = i + 1;
+        const raw = d.por_mes_total[m];
+        const val = raw != null ? (d.qtd > 0 ? raw * d.qtd : raw) : null;
+        if (val != null) { totaisMes[i] += val; totalTicker += val; }
+        return val != null ? `<td class="num">${fmt(val)}</td>` : `<td class="num" style="color:#cbd5e1">—</td>`;
+      });
+
+      totalGeral += totalTicker;
+      html += `<tr>
+        <td><span class="badge ${badgeClass}">${d.tipo}</span> ${d.ticker}${qtdSuffix}</td>
+        ${cells.join('')}
+        <td class="num total-col">${fmt(totalTicker)}</td>
+      </tr>`;
+    });
+
+    html += `</tbody>
+      <tfoot><tr>
+        <td>TOTAL</td>
+        ${totaisMes.map(v => `<td class="num">${v > 0 ? fmt(v) : '<span style="color:#475569">—</span>'}</td>`).join('')}
+        <td class="num">${fmt(totalGeral)}</td>
+      </tr></tfoot>
+      </table></div></div>`;
+
+    return html;
+  }
+
+  function setStatus(msg) {
+    document.getElementById('status').innerHTML = msg;
+  }
+</script>
+</body>
+</html>

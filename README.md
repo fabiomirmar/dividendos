@@ -9,11 +9,13 @@ Consulta proventos (dividendos, JCP, rendimentos) de ações e FIIs brasileiros 
 - **Múltiplos tickers** → tabela combinada com meses no eixo horizontal e total anual por ativo
 - **Quantidade de cotas** → informe `TICKER:COTAS` para multiplicar os proventos pela quantidade e ver o total em reais
 - Retries automáticos em caso de timeout do servidor
-- Sem dependências externas — apenas a biblioteca padrão do Python 3
+- Sem dependências externas para o CLI — apenas a biblioteca padrão do Python 3
+- A aplicação web requer [Flask](https://flask.palletsprojects.com/) (`pip install flask`)
 
 ## Requisitos
 
 - Python 3.10 ou superior
+- Flask 3.0+ (apenas para a aplicação web: `pip install -r requirements.txt`)
 
 ## Uso
 
@@ -97,6 +99,32 @@ python3 dividendos.py --help
   │ TOTAL             │   175.00 │   234.10 │   256.23 │   157.50 │   225.92 │   225.25 │        — │    70.10 │    70.10 │        — │        — │        — │    1414.21 │
   └───────────────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴────────────┘
 ```
+
+## Aplicação Web
+
+O projeto inclui também uma interface web que oferece as mesmas funcionalidades do CLI.
+
+### Requisitos adicionais
+
+```bash
+pip install -r requirements.txt
+```
+
+### Iniciar o servidor
+
+```bash
+python3 app.py
+# Acesse: http://localhost:5000
+```
+
+### Funcionalidades da interface web
+
+- Adicione tickers um a um com quantidade opcional (chips removíveis)
+- Selecione o ano de consulta
+- **Ticker único** → tabela detalhada mês a mês
+- **Múltiplos tickers** → tabela combinada (matriz) com totais mensais
+- Mensagens de erro para tickers inválidos
+- Responsivo para desktop e mobile
 
 ## Notas
 
