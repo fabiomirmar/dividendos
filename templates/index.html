@@ -145,6 +145,12 @@
     .matrix-table .total-col { background: #1e3a5f !important; color: #e2e8f0; font-weight: 700; }
     .matrix-table tfoot td { background: #1e293b; color: #f1f5f9; font-weight: 700; }
     .matrix-table tfoot td:first-child { background: #0f172a; }
+    .matrix-subtotal td {
+      background: #f8fafc; font-weight: 600; color: #334155;
+      border-top: 2px solid #e2e8f0; border-bottom: 1px solid #e2e8f0;
+      font-style: italic;
+    }
+    .matrix-subtotal td.total-col { background: #dbeafe; color: #1e3a5f; }
 
     /* Detailed table: keep key columns from wrapping */
     .detail-table td:nth-child(2),
@@ -480,6 +486,14 @@
   function renderMatriz(resultados, mesesCurtos, ano) {
     const comQtd = resultados.some(d => d.qtd > 0);
 
+    // Separar em grupos preservando a ordem original dentro de cada grupo
+    const fiis  = resultados.filter(d => d.tipo === 'FII');
+    const acoes = resultados.filter(d => d.tipo !== 'FII');
+    const grupos = [];
+    if (fiis.length)  grupos.push({ label: 'Sub-total FIIs',  items: fiis });
+    if (acoes.length) grupos.push({ label: 'Sub-total Ações', items: acoes });
+    const multiGrupo = grupos.length > 1;
+
     let html = `<div class="result-section card">
       <div class="result-title">
         Proventos combinados
@@ -496,25 +510,40 @@
     const totaisMes = Array(12).fill(0);
     let totalGeral = 0;
 
-    resultados.forEach(d => {
+    // Helper: render one ticker row, accumulate into provided accumulators
+    function renderTicker(d, acumMes, acumTotal) {
       const badgeClass = d.tipo === 'FII' ? 'badge-fii' : 'badge-acao';
       const qtdSuffix  = d.qtd ? ` <span style="color:#94a3b8;font-size:.78rem">×${d.qtd.toLocaleString('pt-BR')}</span>` : '';
       let totalTicker  = 0;
-
       const cells = Array.from({ length: 12 }, (_, i) => {
         const m   = i + 1;
         const raw = d.por_mes_total[m];
         const val = raw != null ? (d.qtd > 0 ? raw * d.qtd : raw) : null;
-        if (val != null) { totaisMes[i] += val; totalTicker += val; }
+        if (val != null) { acumMes[i] += val; totaisMes[i] += val; totalTicker += val; }
         return val != null ? `<td class="num">${fmt(val, 2, true)}</td>` : `<td class="num" style="color:#cbd5e1">—</td>`;
       });
-
-      totalGeral += totalTicker;
-      html += `<tr>
+      acumTotal.v += totalTicker;
+      totalGeral  += totalTicker;
+      return `<tr>
         <td><span class="badge ${badgeClass}">${d.tipo}</span> ${d.ticker}${qtdSuffix}</td>
         ${cells.join('')}
         <td class="num total-col">${fmt(totalTicker, 2, true)}</td>
       </tr>`;
+    }
+
+    grupos.forEach(grupo => {
+      const gMes   = Array(12).fill(0);
+      const gTotal = { v: 0 };
+
+      grupo.items.forEach(d => { html += renderTicker(d, gMes, gTotal); });
+
+      if (multiGrupo) {
+        html += `<tr class="matrix-subtotal">
+          <td>${grupo.label}</td>
+          ${gMes.map(v => `<td class="num">${v > 0 ? fmt(v, 2, true) : '<span style="color:#94a3b8">—</span>'}</td>`).join('')}
+          <td class="num total-col">${fmt(gTotal.v, 2, true)}</td>
+        </tr>`;
+      }
     });
 
     html += `</tbody>

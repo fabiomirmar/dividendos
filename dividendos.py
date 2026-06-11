@@ -152,6 +152,7 @@ def exibir_matriz(
     tipos:  {ticker: 'FII' | 'Ação'}
     qtds:   {ticker: quantidade_de_cotas}  (0 = sem quantidade)
     Exibe tabela com tickers nas linhas e meses nas colunas.
+    Inclui subtotais por grupo (FIIs / Ações) quando ambos estão presentes.
     """
     tickers   = list(dados.keys())
     com_qtd   = any(qtds.get(t, 0) > 0 for t in tickers)
@@ -162,8 +163,8 @@ def exibir_matriz(
         return f"{t} ({tipos.get(t, '')}){suffix}"
 
     labels = {t: _label(t) for t in tickers}
-    W_TICK = max(8, max(len(l) for l in labels.values()))
-    W_M    = 8 if com_qtd else 7   # wider when showing totals
+    W_TICK = max(16, max(len(l) for l in labels.values()))
+    W_M    = 8 if com_qtd else 7
     W_T    = 10 if com_qtd else 9
 
     def _fmt(v: float | None, qtd: int = 0) -> str:
@@ -181,10 +182,9 @@ def exibir_matriz(
 
     top  = sep_line("┌", "┬", "┬", "┐")
     sep  = sep_line("├", "┼", "┼", "┤")
-    sep2 = sep_line("├", "┼", "┼", "┤")
     bot  = sep_line("└", "┴", "┴", "┘")
 
-    def row(label, mes_vals: list[str], total: str) -> str:
+    def row(label, mes_vals: list[str], total: str, bold: bool = False) -> str:
         cells = " │ ".join(f"{v:>{W_M}}" for v in mes_vals)
         return f"  │ {label:<{W_TICK}} │ {cells} │ {total:>{W_T}} │"
 
@@ -198,26 +198,48 @@ def exibir_matriz(
     print(f"  │ {'Ticker':<{W_TICK}} │ " + " │ ".join(header_meses) + f" │ {'Total':>{W_T}} │")
     print(sep)
 
+    # Agrupar tickers por tipo, preservando a ordem original dentro de cada grupo
+    fiis  = [t for t in tickers if tipos.get(t) == "FII"]
+    acoes = [t for t in tickers if tipos.get(t) != "FII"]
+    grupos = []
+    if fiis:  grupos.append(("Sub-total FIIs",  fiis))
+    if acoes: grupos.append(("Sub-total Ações", acoes))
+    multi_grupo = len(grupos) > 1
+
     total_ano_geral = 0.0
     totais_mes: dict[int, float] = defaultdict(float)
+    primeiro_grupo = True
 
-    for ticker in tickers:
-        por_mes = dados[ticker]
-        qtd = qtds.get(ticker, 0)
-        vals = []
-        total_ticker = 0.0
-        for m in range(1, 13):
-            v = por_mes.get(m)
-            val = (v * qtd if qtd > 0 else v) if v is not None else None
-            totais_mes[m] += val or 0.0
-            total_ticker   += val or 0.0
-            vals.append(_fmt(v, qtd))
-        total_ano_geral += total_ticker
-        print(row(labels[ticker], vals, f"{total_ticker:.2f}"))
+    for label_subtotal, grupo_tickers in grupos:
+        if not primeiro_grupo:
+            print(sep)
+        primeiro_grupo = False
 
-    print(sep2)
-    total_vals = [_fmt(totais_mes.get(m) or None) for m in range(1, 13)]
-    # totais_mes has 0.0 for empty months — show "—" for those
+        subtotal_mes: dict[int, float] = defaultdict(float)
+        subtotal_ano = 0.0
+
+        for ticker in grupo_tickers:
+            por_mes = dados[ticker]
+            qtd = qtds.get(ticker, 0)
+            vals = []
+            total_ticker = 0.0
+            for m in range(1, 13):
+                v = por_mes.get(m)
+                val = (v * qtd if qtd > 0 else v) if v is not None else None
+                totais_mes[m]    += val or 0.0
+                subtotal_mes[m]  += val or 0.0
+                total_ticker     += val or 0.0
+                vals.append(_fmt(v, qtd))
+            total_ano_geral += total_ticker
+            subtotal_ano    += total_ticker
+            print(row(labels[ticker], vals, f"{total_ticker:.2f}"))
+
+        if multi_grupo:
+            print(sep)
+            sub_vals = ["—" if subtotal_mes.get(m, 0) == 0 else f"{subtotal_mes[m]:.2f}" for m in range(1, 13)]
+            print(row(f"{label_subtotal}", sub_vals, f"{subtotal_ano:.2f}"))
+
+    print(sep)
     total_vals = ["—" if totais_mes.get(m, 0) == 0 else f"{totais_mes[m]:.2f}" for m in range(1, 13)]
     print(row(f"{'TOTAL':<{W_TICK}}", total_vals, f"{total_ano_geral:.2f}"))
     print(bot)
