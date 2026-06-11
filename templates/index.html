@@ -142,7 +142,7 @@
     .matrix-table td:last-child   { width: 7%; min-width: 64px; }
     .matrix-table th:not(:first-child):not(:last-child),
     .matrix-table td:not(:first-child):not(:last-child) { width: 6.5%; min-width: 52px; text-align: right; }
-    .matrix-table .total-col { background: #1e3a5f !important; font-weight: 700; }
+    .matrix-table .total-col { background: #1e3a5f !important; color: #e2e8f0; font-weight: 700; }
     .matrix-table tfoot td { background: #1e293b; color: #f1f5f9; font-weight: 700; }
     .matrix-table tfoot td:first-child { background: #0f172a; }
 
@@ -354,9 +354,10 @@
   }
 
   // ── Render ─────────────────────────────────────────────────────────
-  function fmt(v, decimals = 2) {
+  function fmt(v, decimals = 2, currency = false) {
     if (v === null || v === undefined) return '—';
-    return v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+    const s = v.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+    return currency ? 'R$\u00a0' + s : s;
   }
 
   function renderResults(data) {
@@ -436,16 +437,16 @@
             ${ii === 0 ? `<td rowspan="${g.itens.length + (g.itens.length > 1 ? 1 : 0)}">${g.data_pagamento}</td>
                          <td rowspan="${g.itens.length + (g.itens.length > 1 ? 1 : 0)}">${g.data_com}</td>` : ''}
             <td>${item.tipo}</td>
-            <td class="num">${fmt(item.valor, 6)}</td>
-            ${comQtd ? `<td class="num">${fmt(item.total)}</td>` : ''}
+            <td class="num">${fmt(item.valor, 6, true)}</td>
+            ${comQtd ? `<td class="num">${fmt(item.total, 2, true)}</td>` : ''}
           </tr>`;
           mesShown = true;
         });
         if (g.itens.length > 1) {
           html += `<tr class="subtotal-row">
             <td colspan="2">Subtotal</td>
-            <td class="num">${fmt(g.subtotal, 6)}</td>
-            ${comQtd ? `<td class="num">${fmt(g.subtotal_total)}</td>` : ''}
+            <td class="num">${fmt(g.subtotal, 6, true)}</td>
+            ${comQtd ? `<td class="num">${fmt(g.subtotal_total, 2, true)}</td>` : ''}
           </tr>`;
         }
         if (gi < m.grupos.length - 1) {
@@ -456,8 +457,8 @@
       if (m.grupos.length > 1) {
         html += `<tr class="month-total-row">
           <td colspan="3">Total ${m.nome}</td>
-          <td class="num">${fmt(m.total_bruto, 6)}</td>
-          ${comQtd ? `<td class="num">${fmt(m.total_reais)}</td>` : ''}
+          <td class="num">${fmt(m.total_bruto, 6, true)}</td>
+          ${comQtd ? `<td class="num">${fmt(m.total_reais, 2, true)}</td>` : ''}
         </tr>`;
       }
     });
@@ -465,10 +466,10 @@
     // Footer
     if (comQtd) {
       html += `
-        <tr class="total-label-row"><td colspan="4">Total ano (por cota)</td><td class="num">${fmt(d.total_ano_bruto, 6)}</td><td></td></tr>
-        <tr class="total-row"><td colspan="4">Total ano</td><td></td><td class="num">${fmt(d.total_ano_reais)}</td></tr>`;
+        <tr class="total-label-row"><td colspan="4">Total ano (por cota)</td><td class="num">${fmt(d.total_ano_bruto, 6, true)}</td><td></td></tr>
+        <tr class="total-row"><td colspan="4">Total ano</td><td></td><td class="num">${fmt(d.total_ano_reais, 2, true)}</td></tr>`;
     } else {
-      html += `<tr class="total-row"><td colspan="4">Total ano</td><td class="num">${fmt(d.total_ano_bruto, 6)}</td></tr>`;
+      html += `<tr class="total-row"><td colspan="4">Total ano</td><td class="num">${fmt(d.total_ano_bruto, 6, true)}</td></tr>`;
     }
 
     html += `</tbody></table></div></div>`;
@@ -505,22 +506,22 @@
         const raw = d.por_mes_total[m];
         const val = raw != null ? (d.qtd > 0 ? raw * d.qtd : raw) : null;
         if (val != null) { totaisMes[i] += val; totalTicker += val; }
-        return val != null ? `<td class="num">${fmt(val)}</td>` : `<td class="num" style="color:#cbd5e1">—</td>`;
+        return val != null ? `<td class="num">${fmt(val, 2, true)}</td>` : `<td class="num" style="color:#cbd5e1">—</td>`;
       });
 
       totalGeral += totalTicker;
       html += `<tr>
         <td><span class="badge ${badgeClass}">${d.tipo}</span> ${d.ticker}${qtdSuffix}</td>
         ${cells.join('')}
-        <td class="num total-col">${fmt(totalTicker)}</td>
+        <td class="num total-col">${fmt(totalTicker, 2, true)}</td>
       </tr>`;
     });
 
     html += `</tbody>
       <tfoot><tr>
         <td>TOTAL</td>
-        ${totaisMes.map(v => `<td class="num">${v > 0 ? fmt(v) : '<span style="color:#475569">—</span>'}</td>`).join('')}
-        <td class="num">${fmt(totalGeral)}</td>
+        ${totaisMes.map(v => `<td class="num">${v > 0 ? fmt(v, 2, true) : '<span style="color:#475569">—</span>'}</td>`).join('')}
+        <td class="num">${fmt(totalGeral, 2, true)}</td>
       </tr></tfoot>
       </table></div></div>`;
 
