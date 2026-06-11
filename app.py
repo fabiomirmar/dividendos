@@ -9,12 +9,13 @@ Uso:
 Acesse: http://localhost:5000
 """
 
+import json as _json
 import sys
 import os
 import time
 import argparse
 from datetime import date
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, Response, stream_with_context
 
 try:
     import yaml
@@ -145,7 +146,56 @@ def api_proventos():
     })
 
 
-if __name__ == "__main__":
+@app.route("/api/proventos/stream", methods=["POST"])
+def api_proventos_stream():
+    """
+    Endpoint SSE: processa tickers um a um e emite eventos à medida que avança.
+    Eventos emitidos (formato SSE, 'data: <JSON>\\n\\n'):
+      {"type": "progress", "ticker": "...", "index": 1, "total": 4}
+      {"type": "result",   "data": {...}}
+      {"type": "error",    "ticker": "...", "erro": "..."}
+      {"type": "done",     "ano": 2026, "meses_curtos": [...]}
+    """
+    body    = request.get_json(force=True)
+    ativos  = body.get("ativos", [])
+    ano     = int(body.get("ano", date.today().year))
+
+    def _sse(payload: dict) -> str:
+        return f"data: {_json.dumps(payload, ensure_ascii=False)}\n\n"
+
+    def generate():
+        total = sum(1 for a in ativos if a.get("ticker", "").strip())
+        idx   = 0
+        for a in ativos:
+            ticker = a.get("ticker", "").strip().upper()
+            qtd    = int(a.get("qtd") or 0)
+            if not ticker:
+                continue
+            idx += 1
+            if idx > 1:
+                time.sleep(INTER_REQ_DELAY)
+
+            yield _sse({"type": "progress", "ticker": ticker, "index": idx, "total": total})
+
+            try:
+                dados = _processar_ticker(ticker, qtd, ano)
+                yield _sse({"type": "result", "data": dados})
+            except (ValueError, TimeoutError, RuntimeError) as e:
+                yield _sse({"type": "error", "ticker": ticker, "erro": str(e)})
+
+        yield _sse({"type": "done", "ano": ano, "meses_curtos": MESES_CURTOS})
+
+    return Response(
+        stream_with_context(generate()),
+        content_type="text/event-stream",
+        headers={
+            "Cache-Control":    "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+
     parser = argparse.ArgumentParser(
         description="Servidor web de consulta de proventos de ações e FIIs.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -186,4 +236,4 @@ if __name__ == "__main__":
             sys.exit(1)
 
     print(f"Iniciando servidor em http://localhost:{args.port}")
-    app.run(host="0.0.0.0", port=args.port, debug=False)
+    app.run(host="0.0.0.0", port=args.port, debug=False, threaded=True)

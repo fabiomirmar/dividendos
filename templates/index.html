@@ -218,6 +218,7 @@
   });
 
   // Carrega ativos pré-definidos do arquivo de configuração (se houver)
+  let _configStatusTimer = null;
   (async () => {
     try {
       const resp = await fetch('/api/config');
@@ -231,7 +232,7 @@
         configSource = true;
         renderChips();
         setStatus(`${ativos.length} ativo(s) carregado(s) do arquivo de configuração.`);
-        setTimeout(() => setStatus(''), 4000);
+        _configStatusTimer = setTimeout(() => setStatus(''), 4000);
       }
     } catch (_) { /* sem config, ignora */ }
   })();
@@ -270,26 +271,71 @@
     `).join('');
   }
 
-  // ── Search ─────────────────────────────────────────────────────────
+  // ── Search (streaming) ─────────────────────────────────────────────
   async function buscar() {
     if (!ativos.length) { setStatus('Adicione ao menos um ticker.'); return; }
 
-    const btn = document.getElementById('btn-buscar');
+    // Cancela o timer da mensagem de config para não interferir
+    if (_configStatusTimer) { clearTimeout(_configStatusTimer); _configStatusTimer = null; }
+
+    const btn   = document.getElementById('btn-buscar');
+    const total = ativos.length;
     btn.disabled = true;
-    setStatus('<span class="spinner"></span>Consultando Status Invest...');
     document.getElementById('results').innerHTML = '';
 
     const ano = parseInt(document.getElementById('sel-ano').value);
 
+    // Acumula resultados e erros vindos do stream
+    const resultados = [];
+    const erros      = [];
+    let   metaDone   = null;   // {ano, meses_curtos} do evento "done"
+
     try {
-      const resp = await fetch('/api/proventos', {
-        method: 'POST',
+      const resp = await fetch('/api/proventos/stream', {
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ativos, ano }),
+        body:    JSON.stringify({ ativos, ano }),
       });
-      const data = await resp.json();
+
+      const reader  = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let   buf     = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buf += decoder.decode(value, { stream: true });
+        // SSE: blocos separados por \n\n
+        const blocks = buf.split('\n\n');
+        buf = blocks.pop();   // guarda bloco incompleto
+
+        for (const block of blocks) {
+          const line = block.trim();
+          if (!line.startsWith('data: ')) continue;
+          let ev;
+          try { ev = JSON.parse(line.slice(6)); } catch { continue; }
+
+          if (ev.type === 'progress') {
+            setStatus(
+              `<span class="spinner"></span>` +
+              `Consultando <b>${ev.ticker}</b>` +
+              (total > 1 ? ` <span style="color:#94a3b8">(${ev.index} de ${ev.total})</span>` : '') +
+              `…`
+            );
+          } else if (ev.type === 'result') {
+            resultados.push(ev.data);
+          } else if (ev.type === 'error') {
+            erros.push({ ticker: ev.ticker, erro: ev.erro });
+          } else if (ev.type === 'done') {
+            metaDone = ev;
+          }
+        }
+      }
+
       setStatus('');
-      renderResults(data);
+      renderResults({ resultados, erros, ano: metaDone?.ano ?? ano, meses_curtos: metaDone?.meses_curtos ?? [] });
+
     } catch (err) {
       setStatus('Erro ao conectar com o servidor.');
     } finally {
