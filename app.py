@@ -11,6 +11,7 @@ Acesse: http://localhost:5000
 
 import sys
 import os
+import time
 import argparse
 from datetime import date
 from flask import Flask, render_template, request, jsonify
@@ -23,7 +24,7 @@ except ImportError:
 
 # Allow importing core from the same directory
 sys.path.insert(0, os.path.dirname(__file__))
-from core import buscar_proventos, agregar_por_mes, total_por_mes, MESES, MESES_CURTOS
+from core import buscar_proventos, agregar_por_mes, total_por_mes, MESES, MESES_CURTOS, INTER_REQ_DELAY
 
 app = Flask(__name__)
 
@@ -122,17 +123,18 @@ def api_proventos():
     resultados = []
     erros      = []
 
-    for a in ativos:
+    for i, a in enumerate(ativos):
         ticker = a.get("ticker", "").strip().upper()
         qtd    = int(a.get("qtd") or 0)
         if not ticker:
             continue
+        # Pequeno delay entre requisições para evitar rate-limit (429)
+        if i > 0:
+            time.sleep(INTER_REQ_DELAY)
         try:
             dados = _processar_ticker(ticker, qtd, ano)
             resultados.append(dados)
-        except ValueError as e:
-            erros.append({"ticker": ticker, "erro": str(e)})
-        except TimeoutError as e:
+        except (ValueError, TimeoutError, RuntimeError) as e:
             erros.append({"ticker": ticker, "erro": str(e)})
 
     return jsonify({

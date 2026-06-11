@@ -301,7 +301,7 @@ def main():
             print(f"  Erro: {e}")
             print("  Verifique se o ticker está correto (ex: PETR4, MXRF11, KNRI11).")
             sys.exit(1)
-        except TimeoutError as e:
+        except (TimeoutError, RuntimeError) as e:
             print(f"\n  Erro: {e}.\n  O site Status Invest pode estar fora do ar ou com lentidão.")
             sys.exit(1)
         por_mes = agregar_por_mes(proventos, ano_atual)
@@ -325,7 +325,7 @@ def main():
         except ValueError as e:
             print(f"ignorado ({e})")
             erros.append(ticker)
-        except TimeoutError as e:
+        except (TimeoutError, RuntimeError) as e:
             print(f"ignorado ({e})")
             erros.append(ticker)
 

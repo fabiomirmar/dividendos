@@ -20,12 +20,17 @@ HEADERS = {
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/120.0.0.0 Safari/537.36"
     ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "pt-BR,pt;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
 }
 
-MAX_RETRIES  = 3
-TIMEOUT_SECS = 20
-RETRY_DELAY  = 3
+MAX_RETRIES       = 4
+TIMEOUT_SECS      = 20
+RETRY_DELAY       = 3   # segundos base entre retries de timeout
+RATE_LIMIT_DELAY  = 10  # segundos de espera inicial ao receber 429
+INTER_REQ_DELAY   = 1.5 # segundos entre requisições consecutivas
 
 MESES = [
     "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -38,8 +43,11 @@ MESES_CURTOS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
 
 def _fetch_html(url: str, on_retry=None) -> str | None:
     """
-    Faz o download do HTML da URL com retries em caso de timeout.
-    on_retry: callback opcional chamado a cada retry com (attempt, max_retries).
+    Faz o download do HTML da URL com retries em caso de timeout ou rate-limit.
+    - HTTP 404 → retorna None (ticker não encontrado nessa URL).
+    - HTTP 429 → espera (respeitando Retry-After se presente) e tenta novamente.
+    - TimeoutError → retenta com RETRY_DELAY entre tentativas.
+    on_retry: callback opcional chamado a cada retry com (attempt, max_retries, reason).
     """
     req = urllib.request.Request(url, headers=HEADERS)
     for attempt in range(1, MAX_RETRIES + 1):
@@ -50,17 +58,30 @@ def _fetch_html(url: str, on_retry=None) -> str | None:
         except urllib.error.HTTPError as e:
             if e.code == 404:
                 return None
+            if e.code == 429:
+                if attempt >= MAX_RETRIES:
+                    raise RuntimeError(
+                        "o servidor retornou 'Too Many Requests' (429) após "
+                        f"{MAX_RETRIES} tentativas — aguarde alguns minutos e tente novamente"
+                    )
+                # Respeita o cabeçalho Retry-After se o servidor enviar
+                retry_after = e.headers.get("Retry-After")
+                wait = int(retry_after) if retry_after and retry_after.isdigit() \
+                       else RATE_LIMIT_DELAY * attempt
+                if on_retry:
+                    on_retry(attempt, MAX_RETRIES, f"rate limit (aguardando {wait}s)")
+                time.sleep(wait)
+                continue
             raise
         except TimeoutError:
-            if attempt < MAX_RETRIES:
-                if on_retry:
-                    on_retry(attempt, MAX_RETRIES)
-                time.sleep(RETRY_DELAY)
-            else:
+            if attempt >= MAX_RETRIES:
                 raise TimeoutError(
                     f"o servidor não respondeu após {MAX_RETRIES} tentativas "
                     f"({TIMEOUT_SECS}s cada)"
                 )
+            if on_retry:
+                on_retry(attempt, MAX_RETRIES, "timeout")
+            time.sleep(RETRY_DELAY)
     return None
 
 
