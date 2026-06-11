@@ -25,7 +25,7 @@
     header h1 { font-size: 1.3rem; font-weight: 600; letter-spacing: .02em; }
     header span { font-size: .85rem; color: #94a3b8; }
 
-    main { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
+    main { max-width: min(1800px, calc(100vw - 3rem)); margin: 0 auto; padding: 2rem 1.5rem; }
 
     /* ── Form card ─────────────────────────────────── */
     .card {
@@ -111,12 +111,11 @@
     th {
       background: #1e293b; color: #e2e8f0;
       padding: .55rem .8rem; text-align: left; font-weight: 500;
-      white-space: nowrap;
     }
-    td { padding: .45rem .8rem; border-bottom: 1px solid #f1f5f9; white-space: nowrap; }
+    td { padding: .45rem .8rem; border-bottom: 1px solid #f1f5f9; }
     tr:last-child td { border-bottom: none; }
     tr:hover td { background: #f8fafc; }
-    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
     .subtotal-row td { color: #64748b; font-style: italic; background: #fafafa; }
     .subtotal-row td:first-child { padding-left: 2rem; }
@@ -135,11 +134,22 @@
     .empty-month td { color: #cbd5e1; }
 
     /* ── Matrix table ─────────────────────────────── */
-    .matrix-table th:first-child, .matrix-table td:first-child { text-align: left; min-width: 160px; }
-    .matrix-table th:not(:first-child), .matrix-table td:not(:first-child) { text-align: right; min-width: 72px; }
+    /* table-layout:fixed distributes width proportionally across the viewport */
+    .matrix-table { table-layout: fixed; }
+    .matrix-table th:first-child,
+    .matrix-table td:first-child  { text-align: left; width: 14%; min-width: 120px; }
+    .matrix-table th:last-child,
+    .matrix-table td:last-child   { width: 7%; min-width: 64px; }
+    .matrix-table th:not(:first-child):not(:last-child),
+    .matrix-table td:not(:first-child):not(:last-child) { width: 6.5%; min-width: 52px; text-align: right; }
     .matrix-table .total-col { background: #1e3a5f !important; font-weight: 700; }
     .matrix-table tfoot td { background: #1e293b; color: #f1f5f9; font-weight: 700; }
     .matrix-table tfoot td:first-child { background: #0f172a; }
+
+    /* Detailed table: keep key columns from wrapping */
+    .detail-table td:nth-child(2),
+    .detail-table td:nth-child(3) { white-space: nowrap; width: 100px; }
+    .detail-table td:first-child  { white-space: nowrap; min-width: 90px; }
 
     /* spinner */
     .spinner {
@@ -375,7 +385,7 @@
     if (!data.resultados?.length) { el.innerHTML = html; return; }
 
     if (data.resultados.length === 1) {
-      html += renderDetalhado(data.resultados[0]);
+      html += renderDetalhadoFlat(data.resultados[0]);
     } else {
       html += renderMatriz(data.resultados, data.meses_curtos, data.ano);
     }
@@ -384,67 +394,6 @@
   }
 
   // ── Detailed view ──────────────────────────────────────────────────
-  function renderDetalhado(d) {
-    const comQtd = d.qtd > 0;
-    const badgeClass = d.tipo === 'FII' ? 'badge-fii' : 'badge-acao';
-    const qtdLabel = comQtd ? ` · ${d.qtd.toLocaleString('pt-BR')} cotas` : '';
-
-    let html = `<div class="result-section card">
-      <div class="result-title">
-        ${d.ticker}
-        <span class="badge ${badgeClass}">${d.tipo}</span>
-        <span style="font-weight:400;color:#64748b;font-size:.9rem">${d.ano}${qtdLabel}</span>
-      </div>
-      <div class="tbl-wrap"><table>
-        <thead><tr>
-          <th>Mês</th>
-          <th>Pagamento</th>
-          <th>Data-com</th>
-          <th>Tipo</th>
-          <th class="num">${comQtd ? 'R$/cota' : 'Valor (R$)'}</th>
-          ${comQtd ? '<th class="num">Total (R$)</th>' : ''}
-        </tr></thead>
-        <tbody>`;
-
-    d.meses.forEach(m => {
-      if (!m.grupos.length) {
-        html += `<tr class="empty-month">
-          <td>${m.nome}</td><td>—</td><td></td><td></td><td></td>
-          ${comQtd ? '<td></td>' : ''}
-        </tr>`;
-        return;
-      }
-
-      let firstRow = true;
-      m.grupos.forEach((g, gi) => {
-        g.itens.forEach((item, ii) => {
-          const mesCell  = (firstRow && ii === 0) ? `<td rowspan="${m.grupos.reduce((s,x)=>s+x.itens.length+(x.itens.length>1?1:0),0)+(m.grupos.length>1?1:0)}">${m.nome}</td>` : '';
-          const pgtoCell = ii === 0 ? `<td rowspan="${g.itens.length + (g.itens.length > 1 ? 1 : 0)}">${g.data_pagamento}</td><td rowspan="${g.itens.length + (g.itens.length > 1 ? 1 : 0)}">${g.data_com}</td>` : '';
-          html += `<tr>
-            ${firstRow && ii === 0 ? '' : ''}
-            ${ii === 0 && gi === 0 ? `<td rowspan="999" style="display:none"></td>` : ''}
-            <td>${item.tipo}</td>
-            <td class="num">${fmt(item.valor, 6)}</td>
-            ${comQtd ? `<td class="num">${fmt(item.total)}</td>` : ''}
-          </tr>`;
-          firstRow = false;
-        });
-        if (g.itens.length > 1) {
-          html += `<tr class="subtotal-row">
-            <td>Subtotal</td>
-            <td class="num">${fmt(g.subtotal, 6)}</td>
-            ${comQtd ? `<td class="num">${fmt(g.subtotal_total)}</td>` : ''}
-          </tr>`;
-        }
-      });
-    });
-
-    html += `</tbody></table></div></div>`;
-
-    // Simpler flat table (cleaner)
-    return renderDetalhadoFlat(d);
-  }
-
   function renderDetalhadoFlat(d) {
     const comQtd = d.qtd > 0;
     const badgeClass = d.tipo === 'FII' ? 'badge-fii' : 'badge-acao';
@@ -456,7 +405,7 @@
         <span class="badge ${badgeClass}">${d.tipo}</span>
         <span style="font-weight:400;color:#64748b;font-size:.9rem">${d.ano}${qtdLabel}</span>
       </div>
-      <div class="tbl-wrap"><table>
+      <div class="tbl-wrap"><table class="detail-table">
         <thead><tr>
           <th>Mês</th>
           <th>Pagamento</th>
