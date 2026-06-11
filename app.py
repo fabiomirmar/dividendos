@@ -97,7 +97,7 @@ def _processar_ticker(ticker: str, qtd: int, ano: int) -> dict:
         "meses":           meses_data,
         "total_ano_bruto": round(total_ano_bruto, 6),
         "total_ano_reais": round(total_ano_bruto * qtd, 2) if qtd else None,
-        "por_mes_total":   {m: round(v, 2) for m, v in por_mes_total.items()},
+        "por_mes_total":   {m: round(v, 6) for m, v in por_mes_total.items()},
     }
 
 
