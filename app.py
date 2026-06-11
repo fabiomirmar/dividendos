@@ -195,7 +195,7 @@ def api_proventos_stream():
     )
 
 
-
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Servidor web de consulta de proventos de ações e FIIs.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
