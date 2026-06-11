@@ -19,3 +19,7 @@ env/
 # OS
 .DS_Store
 Thumbs.db
+
+# Arquivos de carteira pessoal (use carteira.example.yaml como modelo)
+carteira.yaml
+*.carteira.yaml

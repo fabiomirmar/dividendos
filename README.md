@@ -113,9 +113,36 @@ pip install -r requirements.txt
 ### Iniciar o servidor
 
 ```bash
+# Sem configuração prévia (adicione os tickers via web)
 python3 app.py
-# Acesse: http://localhost:5000
+
+# Com arquivo de configuração (tickers pré-carregados na interface)
+python3 app.py --config carteira.yaml
+python3 app.py -c carteira.yaml
+
+# Porta alternativa
+python3 app.py -c carteira.yaml --port 8080
 ```
+
+### Arquivo de configuração (`carteira.yaml`)
+
+Crie um arquivo YAML baseado no exemplo `carteira.example.yaml`:
+
+```yaml
+ativos:
+  - ticker: PETR4
+    qtd: 200        # quantidade de ações/cotas (opcional)
+
+  - ticker: MXRF11
+    qtd: 500
+
+  - ticker: VALE3   # sem quantidade: exibe apenas R$/cota
+
+  - ticker: KNRI11
+    qtd: 150
+```
+
+Ao iniciar com `--config`, os ativos aparecem pré-carregados na interface (marcados com um ponto roxo). Você ainda pode adicionar ou remover tickers manualmente via web.
 
 ### Funcionalidades da interface web
 

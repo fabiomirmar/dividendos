@@ -72,8 +72,10 @@
       border-radius: 20px; padding: .3rem .75rem;
       font-size: .85rem; display: flex; align-items: center; gap: .4rem;
     }
+    .chip.from-config { background: #eff6ff; border-color: #bfdbfe; }
     .chip .ticker-label { font-weight: 600; color: #334155; }
     .chip .qtd-label    { color: #64748b; font-size: .8rem; }
+    .chip .config-dot   { width: 6px; height: 6px; border-radius: 50%; background: #6366f1; flex-shrink: 0; }
 
     /* ── Status / error ───────────────────────────── */
     #status { font-size: .88rem; color: #64748b; min-height: 1.5rem; }
@@ -192,6 +194,7 @@
 <script>
   // ── State ──────────────────────────────────────────────────────────
   const ativos = [];   // [{ticker, qtd}]
+  let configSource = false;  // true quando ativos vieram do arquivo de config
 
   // ── Init ───────────────────────────────────────────────────────────
   const anoAtual = {{ ano }};
@@ -208,6 +211,25 @@
   document.getElementById('inp-qtd').addEventListener('keydown', e => {
     if (e.key === 'Enter') addTicker();
   });
+
+  // Carrega ativos pré-definidos do arquivo de configuração (se houver)
+  (async () => {
+    try {
+      const resp = await fetch('/api/config');
+      const data = await resp.json();
+      if (data.ativos && data.ativos.length > 0) {
+        data.ativos.forEach(a => {
+          if (!ativos.find(x => x.ticker === a.ticker)) {
+            ativos.push({ ticker: a.ticker, qtd: a.qtd || 0, fromConfig: true });
+          }
+        });
+        configSource = true;
+        renderChips();
+        setStatus(`${ativos.length} ativo(s) carregado(s) do arquivo de configuração.`);
+        setTimeout(() => setStatus(''), 4000);
+      }
+    } catch (_) { /* sem config, ignora */ }
+  })();
 
   // ── Ticker list ────────────────────────────────────────────────────
   function addTicker() {
@@ -234,7 +256,8 @@
   function renderChips() {
     const el = document.getElementById('ticker-list');
     el.innerHTML = ativos.map(a => `
-      <div class="chip">
+      <div class="chip${a.fromConfig ? ' from-config' : ''}">
+        ${a.fromConfig ? '<span class="config-dot" title="Do arquivo de configuração"></span>' : ''}
         <span class="ticker-label">${a.ticker}</span>
         ${a.qtd ? `<span class="qtd-label">×${a.qtd.toLocaleString('pt-BR')}</span>` : ''}
         <button class="btn-remove" onclick="removeTicker('${a.ticker}')" title="Remover">×</button>

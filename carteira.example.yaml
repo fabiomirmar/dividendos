@@ -1,0 +1,23 @@
+# Arquivo de configuração de carteira — exemplo
+#
+# Uso:
+#   python3 app.py --config carteira.yaml
+#
+# Campos por ativo:
+#   ticker  — código do ativo na B3 (obrigatório)
+#   qtd     — quantidade de cotas/ações (opcional; omita ou use 0 para ver apenas R$/cota)
+
+ativos:
+  # Ações
+  - ticker: PETR4
+    qtd: 200
+
+  - ticker: VALE3
+    qtd: 100
+
+  # Fundos Imobiliários
+  - ticker: MXRF11
+    qtd: 500
+
+  - ticker: KNRI11
+    qtd: 150

@@ -1,19 +1,51 @@
 """
 Servidor web para consulta de proventos de ações e FIIs.
-Uso: python3 app.py
+
+Uso:
+  python3 app.py                          # sem configuração prévia
+  python3 app.py --config carteira.yaml   # com arquivo de configuração
+  python3 app.py -c carteira.yaml         # forma abreviada
+
 Acesse: http://localhost:5000
 """
 
 import sys
 import os
+import argparse
 from datetime import date
 from flask import Flask, render_template, request, jsonify
+
+try:
+    import yaml
+    _YAML_AVAILABLE = True
+except ImportError:
+    _YAML_AVAILABLE = False
 
 # Allow importing core from the same directory
 sys.path.insert(0, os.path.dirname(__file__))
 from core import buscar_proventos, agregar_por_mes, total_por_mes, MESES, MESES_CURTOS
 
 app = Flask(__name__)
+
+# Ativos pré-carregados do arquivo de configuração (lista de {ticker, qtd})
+app.config["ATIVOS_CONFIG"] = []
+
+
+def _carregar_config(caminho: str) -> list[dict]:
+    """Lê um arquivo YAML de configuração e retorna lista de {ticker, qtd}."""
+    if not _YAML_AVAILABLE:
+        print("AVISO: pyyaml não está instalado. Execute: pip install pyyaml")
+        return []
+    with open(caminho, encoding="utf-8") as f:
+        dados = yaml.safe_load(f)
+    ativos = []
+    for item in dados.get("ativos", []):
+        ticker = str(item.get("ticker", "")).strip().upper()
+        if not ticker:
+            continue
+        qtd = int(item.get("qtd") or 0)
+        ativos.append({"ticker": ticker, "qtd": qtd})
+    return ativos
 
 
 def _processar_ticker(ticker: str, qtd: int, ano: int) -> dict:
@@ -72,6 +104,12 @@ def index():
     return render_template("index.html", ano=date.today().year)
 
 
+@app.route("/api/config")
+def api_config():
+    """Retorna os ativos pré-carregados do arquivo de configuração."""
+    return jsonify({"ativos": app.config["ATIVOS_CONFIG"]})
+
+
 @app.route("/api/proventos", methods=["POST"])
 def api_proventos():
     body = request.get_json(force=True)
@@ -106,6 +144,44 @@ def api_proventos():
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    print(f"Iniciando servidor em http://localhost:{port}")
-    app.run(host="0.0.0.0", port=port, debug=False)
+    parser = argparse.ArgumentParser(
+        description="Servidor web de consulta de proventos de ações e FIIs.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Exemplos:\n"
+            "  python3 app.py\n"
+            "  python3 app.py --config carteira.yaml\n"
+            "  python3 app.py -c carteira.yaml -p 8080\n"
+        ),
+    )
+    parser.add_argument(
+        "-c", "--config",
+        metavar="ARQUIVO",
+        help="Arquivo YAML com lista predefinida de ativos (tickers e cotas).",
+    )
+    parser.add_argument(
+        "-p", "--port",
+        type=int,
+        default=int(os.environ.get("PORT", 5000)),
+        metavar="PORTA",
+        help="Porta do servidor (padrão: 5000).",
+    )
+    args = parser.parse_args()
+
+    if args.config:
+        try:
+            ativos = _carregar_config(args.config)
+            app.config["ATIVOS_CONFIG"] = ativos
+            print(f"Configuração carregada: {args.config} ({len(ativos)} ativo(s))")
+            for a in ativos:
+                sufixo = f"  ×{a['qtd']}" if a["qtd"] else ""
+                print(f"  • {a['ticker']}{sufixo}")
+        except FileNotFoundError:
+            print(f"ERRO: arquivo não encontrado: {args.config}")
+            sys.exit(1)
+        except Exception as e:
+            print(f"ERRO ao ler configuração: {e}")
+            sys.exit(1)
+
+    print(f"Iniciando servidor em http://localhost:{args.port}")
+    app.run(host="0.0.0.0", port=args.port, debug=False)
