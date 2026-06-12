@@ -106,7 +106,13 @@
     .badge-acao { background: #dcfce7; color: #166534; }
 
     /* ── Table base ───────────────────────────────── */
-    .tbl-wrap { overflow-x: auto; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.07); }
+    .tbl-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-x: contain;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.07);
+    }
     table { border-collapse: collapse; width: 100%; font-size: .84rem; background: #fff; }
     th {
       background: #1e293b; color: #e2e8f0;
@@ -165,6 +171,72 @@
       vertical-align: middle; margin-right: .4rem;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Mobile ───────────────────────────────────── */
+    @media (max-width: 680px) {
+      main    { padding: 1rem .6rem; }
+      .card   { padding: 1rem .875rem; }
+      header  { padding: .9rem 1rem; }
+
+      /* Form: inputs em coluna única */
+      .form-row    { gap: .5rem; }
+      .form-group input[type="text"]   { width: 110px; }
+      .form-group input[type="number"] { width: 90px; }
+
+      /* Tabelas: fonte e padding menores */
+      table { font-size: .76rem; }
+      th    { padding: .45rem .5rem; }
+      td    { padding: .38rem .5rem; }
+
+      /* Linhas vazias: ocultar na tabela detalhada para reduzir scroll vertical */
+      .empty-month { display: none; }
+
+      /* ── Matriz: layout automático + sticky na 1.ª coluna (ticker) ── */
+      .matrix-table {
+        table-layout: auto;
+        /* largura mínima para 14 colunas a ~52px cada = 728px; força scroll */
+        min-width: 700px;
+      }
+      /* Sticky ticker column */
+      .matrix-table th:first-child,
+      .matrix-table td:first-child {
+        position: sticky;
+        left: 0;
+        z-index: 2;
+        width: auto;
+        min-width: 90px;
+        max-width: 140px;
+        box-shadow: 2px 0 6px rgba(0,0,0,.08);
+        /* fundo opaco para não mostrar células por baixo */
+        background: #fff;
+      }
+      /* Sobrescrever fundo para cada tipo de linha */
+      .matrix-table thead th:first-child         { background: #1e293b; }
+      .matrix-table tfoot  td:first-child         { background: #0f172a; }
+      .matrix-subtotal     td:first-child         { background: #f8fafc !important; }
+      tr:hover td:first-child { background: #f0f9ff; }
+
+      /* Colunas de mês: tamanho mínimo compacto */
+      .matrix-table th:not(:first-child):not(:last-child),
+      .matrix-table td:not(:first-child):not(:last-child) {
+        width: auto; min-width: 54px;
+      }
+      .matrix-table th:last-child,
+      .matrix-table td:last-child { width: auto; min-width: 68px; }
+
+      /* ── Tabela detalhada: colunas de data mais compactas ── */
+      .detail-table th,
+      .detail-table td { padding: .38rem .4rem; }
+      .detail-table td:nth-child(2),
+      .detail-table td:nth-child(3) { min-width: 72px; }
+      .detail-table td:first-child  { min-width: 72px; }
+    }
+
+    /* Breakpoint ainda menor (320px) */
+    @media (max-width: 400px) {
+      table { font-size: .72rem; }
+      .matrix-table { min-width: 660px; }
+    }
   </style>
 </head>
 <body>
