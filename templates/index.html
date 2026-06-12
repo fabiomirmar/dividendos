@@ -639,5 +639,14 @@
     document.getElementById('status').innerHTML = msg;
   }
 </script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/static/sw.js')
+        .then(reg => console.log('SW registrado:', reg.scope))
+        .catch(err => console.warn('SW falhou:', err));
+    });
+  }
+</script>
 </body>
 </html>
