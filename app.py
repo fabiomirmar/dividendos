@@ -27,7 +27,7 @@ except ImportError:
 sys.path.insert(0, os.path.dirname(__file__))
 from core import buscar_proventos, agregar_por_mes, total_por_mes, MESES, MESES_CURTOS, INTER_REQ_DELAY
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), "static"))
 
 # Ativos pré-carregados do arquivo de configuração (lista de {ticker, qtd})
 app.config["ATIVOS_CONFIG"] = []
