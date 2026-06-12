@@ -120,9 +120,39 @@ python3 app.py
 python3 app.py --config carteira.yaml
 python3 app.py -c carteira.yaml
 
-# Porta alternativa
-python3 app.py -c carteira.yaml --port 8080
+# Porta alternativa (flag -P maiúsculo)
+python3 app.py -c carteira.yaml -P 8080
+
+# Com proteção por senha (Base64)
+python3 app.py -p $(echo -n 'minhasenha' | base64)
+
+# Combinando todas as opções
+python3 app.py -c carteira.yaml -P 8080 -p $(echo -n 'minhasenha' | base64)
 ```
+
+### Proteção por senha
+
+Use a flag `-p`/`--password` para proteger o acesso ao site com uma senha. O valor deve estar codificado em Base64:
+
+```bash
+# Gerar o Base64 da sua senha
+echo -n 'minhasenha' | base64
+# → bWluaGFzZW5oYQ==
+
+python3 app.py -p bWluaGFzZW5oYQ==
+```
+
+Sem a flag, o site é acessível sem autenticação.
+
+### Instalação como app no Android (PWA)
+
+A aplicação web é uma **Progressive Web App (PWA)** e pode ser instalada no Android como se fosse um aplicativo nativo:
+
+1. Abra o site no **Chrome** no celular
+2. Toque no menu ⋮ → **"Instalar app"** (ou aguarde o banner automático)
+3. O app aparecerá na tela inicial com o ícone 💰, sem barra de endereço
+
+> **Requisito:** o Chrome exige HTTPS para mostrar o prompt de instalação. Em rede local, use um túnel como [Tailscale](https://tailscale.com) ou [ngrok](https://ngrok.com).
 
 ### Arquivo de configuração (`carteira.yaml`)
 
