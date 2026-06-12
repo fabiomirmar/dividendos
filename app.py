@@ -5,6 +5,8 @@ Uso:
   python3 app.py                          # sem configuração prévia
   python3 app.py --config carteira.yaml   # com arquivo de configuração
   python3 app.py -c carteira.yaml         # forma abreviada
+  python3 app.py -P 8080                  # porta personalizada
+  python3 app.py -p $(echo -n 'senha' | base64)   # com proteção por senha
 
 Acesse: http://localhost:5000
 """
@@ -15,7 +17,10 @@ import os
 import time
 import argparse
 from datetime import date
-from flask import Flask, render_template, request, jsonify, Response, stream_with_context
+import base64
+import secrets
+from functools import wraps
+from flask import Flask, render_template, request, jsonify, Response, stream_with_context, session, redirect, url_for
 
 try:
     import yaml
@@ -28,9 +33,23 @@ sys.path.insert(0, os.path.dirname(__file__))
 from core import buscar_proventos, agregar_por_mes, total_por_mes, MESES, MESES_CURTOS, INTER_REQ_DELAY
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), "static"))
+app.secret_key = secrets.token_hex(32)
 
 # Ativos pré-carregados do arquivo de configuração (lista de {ticker, qtd})
 app.config["ATIVOS_CONFIG"] = []
+app.config["PASSWORD"] = None  # None = sem proteção por senha
+
+
+def _login_required(f):
+    """Decorator: redireciona para login se senha estiver configurada e usuário não autenticado."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if app.config["PASSWORD"] and not session.get("autenticado"):
+            if request.is_json or request.headers.get("Accept") == "text/event-stream":
+                return jsonify({"erro": "Não autorizado"}), 401
+            return redirect(url_for("login", next=request.path))
+        return f(*args, **kwargs)
+    return decorated
 
 
 def _carregar_config(caminho: str) -> list[dict]:
@@ -101,18 +120,40 @@ def _processar_ticker(ticker: str, qtd: int, ano: int) -> dict:
     }
 
 
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    erro = None
+    if request.method == "POST":
+        senha = request.form.get("senha", "")
+        if senha == app.config["PASSWORD"]:
+            session["autenticado"] = True
+            return redirect(request.args.get("next") or url_for("index"))
+        erro = "Senha incorreta."
+    return render_template("login.html", erro=erro)
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
 @app.route("/")
+@_login_required
 def index():
-    return render_template("index.html", ano=date.today().year)
+    return render_template("index.html", ano=date.today().year,
+                           has_password=bool(app.config["PASSWORD"]))
 
 
 @app.route("/api/config")
+@_login_required
 def api_config():
     """Retorna os ativos pré-carregados do arquivo de configuração."""
     return jsonify({"ativos": app.config["ATIVOS_CONFIG"]})
 
 
 @app.route("/api/proventos", methods=["POST"])
+@_login_required
 def api_proventos():
     body = request.get_json(force=True)
     ativos = body.get("ativos", [])   # [{ticker, qtd}]
@@ -147,6 +188,7 @@ def api_proventos():
 
 
 @app.route("/api/proventos/stream", methods=["POST"])
+@_login_required
 def api_proventos_stream():
     """
     Endpoint SSE: processa tickers um a um e emite eventos à medida que avança.
@@ -203,7 +245,8 @@ if __name__ == "__main__":
             "Exemplos:\n"
             "  python3 app.py\n"
             "  python3 app.py --config carteira.yaml\n"
-            "  python3 app.py -c carteira.yaml -p 8080\n"
+            "  python3 app.py -c carteira.yaml -P 8080\n"
+            "  python3 app.py -p $(echo -n 'minhasenha' | base64)\n"
         ),
     )
     parser.add_argument(
@@ -212,11 +255,16 @@ if __name__ == "__main__":
         help="Arquivo YAML com lista predefinida de ativos (tickers e cotas).",
     )
     parser.add_argument(
-        "-p", "--port",
+        "-P", "--port",
         type=int,
         default=int(os.environ.get("PORT", 5000)),
         metavar="PORTA",
         help="Porta do servidor (padrão: 5000).",
+    )
+    parser.add_argument(
+        "-p", "--password",
+        metavar="BASE64",
+        help="Senha em Base64 para proteger o acesso ao site.",
     )
     args = parser.parse_args()
 
@@ -233,6 +281,16 @@ if __name__ == "__main__":
             sys.exit(1)
         except Exception as e:
             print(f"ERRO ao ler configuração: {e}")
+            sys.exit(1)
+
+    if args.password:
+        try:
+            senha_decoded = base64.b64decode(args.password).decode("utf-8")
+            app.config["PASSWORD"] = senha_decoded
+            print("Proteção por senha ativada.")
+        except Exception:
+            print("ERRO: --password deve estar em formato Base64 válido.")
+            print("  Exemplo: python3 app.py -p $(echo -n 'minhasenha' | base64)")
             sys.exit(1)
 
     print(f"Iniciando servidor em http://localhost:{args.port}")

@@ -27,6 +27,7 @@
       display: flex;
       align-items: center;
       gap: 1rem;
+      justify-content: space-between;
     }
     header h1 { font-size: 1.3rem; font-weight: 600; letter-spacing: .02em; }
     header span { font-size: .85rem; color: #94a3b8; }
@@ -251,6 +252,9 @@
   <div>
     <h1>💰 Proventos</h1>
     <span>Ações &amp; FIIs · Status Invest</span>
+  </div>
+  <div id="logout-btn" {% if not has_password %}style="display:none"{% endif %}>
+    <a href="/logout" style="color:#9ab;font-size:0.85rem;text-decoration:none;opacity:0.8">⎋ Sair</a>
   </div>
 </header>
 
