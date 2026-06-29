@@ -198,7 +198,9 @@ def api_config():
             "qtd":       qtd_atual,
             "variavel":  a.get("historico") is not None,
         })
-    return jsonify({"ativos": ativos_resp})
+    carteira_variavel = all(a.get("historico") is not None for a in app.config["ATIVOS_CONFIG"]) \
+        if app.config["ATIVOS_CONFIG"] else False
+    return jsonify({"ativos": ativos_resp, "carteira_variavel": carteira_variavel})
 
 
 @app.route("/api/proventos", methods=["POST"])

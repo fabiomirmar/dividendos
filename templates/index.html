@@ -421,8 +421,9 @@
 
 <script>
   // ── State ──────────────────────────────────────────────────────────
-  const ativos = [];   // [{ticker, qtd}]
+  const ativos = [];   // [{ticker, qtd, variavel?, fromConfig?}]
   let configSource = false;  // true quando ativos vieram do arquivo de config
+  let carteiraVariavel = false;  // true quando toda a carteira usa formato histórico
 
   // ── Init ───────────────────────────────────────────────────────────
   const anoAtual = {{ ano }};
@@ -448,9 +449,15 @@
       const resp = await fetch('/api/config');
       const data = await resp.json();
       if (data.ativos && data.ativos.length > 0) {
+        carteiraVariavel = !!data.carteira_variavel;
         data.ativos.forEach(a => {
           if (!ativos.find(x => x.ticker === a.ticker)) {
-            ativos.push({ ticker: a.ticker, qtd: a.qtd || 0, fromConfig: true });
+            ativos.push({
+              ticker:     a.ticker,
+              qtd:        a.variavel ? 0 : (a.qtd || 0),
+              variavel:   !!a.variavel,
+              fromConfig: true,
+            });
           }
         });
         configSource = true;
@@ -481,14 +488,23 @@
     const bar    = document.getElementById('config-summary');
     const chips  = document.getElementById('summary-chips');
     const editor = document.getElementById('ticker-editor');
+    const btnEdit = document.getElementById('btn-edit-list');
 
     if (configSource && ativos.length > 0) {
-      chips.innerHTML = ativos.map(a =>
-        `<span class="summary-chip">${a.ticker}${a.qtd ? ` ×${a.qtd.toLocaleString('pt-BR')}` : ''}</span>`
-      ).join('');
+      chips.innerHTML = ativos.map(a => {
+        const qtdLabel = a.variavel ? ' <span title="Quantidade varia por mês">×var</span>'
+                       : (a.qtd ? ` ×${a.qtd.toLocaleString('pt-BR')}` : '');
+        return `<span class="summary-chip">${a.ticker}${qtdLabel}</span>`;
+      }).join('');
       bar.style.display = 'flex';
       editor.classList.remove('open');
-      document.getElementById('btn-edit-list').textContent = '✏️ Editar lista';
+      // Carteira histórica: sem botão de edição
+      if (carteiraVariavel) {
+        btnEdit.style.display = 'none';
+      } else {
+        btnEdit.style.display = '';
+        btnEdit.textContent = '✏️ Editar lista';
+      }
     } else {
       bar.style.display = 'none';
       openEditor();
@@ -520,12 +536,16 @@
 
   function renderChips() {
     const el = document.getElementById('ticker-list');
-    el.innerHTML = ativos.map(a => `
+    el.innerHTML = ativos.map(a => {
+      const qtdLabel = a.variavel
+        ? `<span class="qtd-label" title="Quantidade varia por mês">×var</span>`
+        : (a.qtd ? `<span class="qtd-label">×${a.qtd.toLocaleString('pt-BR')}</span>` : '');
+      return `
       <div class="chip${a.fromConfig ? ' from-config' : ''}">
         ${a.fromConfig ? '<span class="config-dot" title="Do arquivo de configuração"></span>' : ''}
         <span class="ticker-label">${a.ticker}</span>
-        ${a.qtd ? `<span class="qtd-label">×${a.qtd.toLocaleString('pt-BR')}</span>` : ''}
-        <button class="btn-remove" onclick="removeTicker('${a.ticker}')" title="Remover">×</button>
+        ${qtdLabel}
+        <button class="btn-remove" onclick="removeTicker('${a.ticker}')" title="Remover">×</button>`;
       </div>
     `).join('');
   }
@@ -555,7 +575,12 @@
       const resp = await fetch('/api/proventos/stream', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ ativos, ano, force_refresh: forceRefresh }),
+        body:    JSON.stringify({
+          // Para tickers variáveis, envia qtd=0 para o servidor usar o historico
+          ativos: ativos.map(a => ({ ticker: a.ticker, qtd: a.variavel ? 0 : a.qtd })),
+          ano,
+          force_refresh: forceRefresh,
+        }),
       });
 
       const reader  = resp.body.getReader();
