@@ -84,6 +84,35 @@
     .chip .qtd-label    { color: #64748b; font-size: .8rem; }
     .chip .config-dot   { width: 6px; height: 6px; border-radius: 50%; background: #6366f1; flex-shrink: 0; }
 
+    /* ── Config summary bar (shown when config loaded & panel collapsed) ── */
+    #config-summary {
+      display: none;
+      align-items: center; gap: .6rem; flex-wrap: wrap;
+      margin-bottom: .75rem;
+      padding: .5rem .75rem;
+      background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px;
+      font-size: .85rem; color: #334155;
+    }
+    #config-summary .summary-chips { display: flex; flex-wrap: wrap; gap: .35rem; flex: 1; }
+    #config-summary .summary-chip {
+      background: #dbeafe; border-radius: 12px; padding: .15rem .55rem;
+      font-size: .78rem; font-weight: 600; color: #1e40af;
+    }
+    #btn-edit-list {
+      background: none; border: 1px solid #94a3b8; border-radius: 6px;
+      color: #64748b; font-size: .8rem; padding: .25rem .6rem;
+      cursor: pointer; white-space: nowrap; transition: background .15s, color .15s;
+    }
+    #btn-edit-list:hover { background: #f1f5f9; color: #334155; }
+
+    /* ── Collapsible ticker editor panel ─────────── */
+    #ticker-editor {
+      overflow: hidden;
+      transition: max-height .3s ease, opacity .3s ease;
+      max-height: 0; opacity: 0;
+    }
+    #ticker-editor.open { max-height: 600px; opacity: 1; }
+
     /* ── Status / error ───────────────────────────── */
     #status { font-size: .88rem; color: #64748b; min-height: 1.5rem; }
     .error-box {
@@ -263,29 +292,46 @@
   <div class="card">
     <h2>Consultar proventos</h2>
 
-    <div class="form-row">
-      <div class="form-group">
-        <label>Ticker</label>
-        <input id="inp-ticker" type="text" placeholder="PETR4" maxlength="8" />
+    <!-- Summary bar: visível apenas quando config carregada e painel fechado -->
+    <div id="config-summary">
+      <div class="summary-chips" id="summary-chips"></div>
+      <button id="btn-edit-list" onclick="toggleEditor()">✏️ Editar lista</button>
+    </div>
+
+    <!-- Painel colapsável com formulário e chips -->
+    <div id="ticker-editor">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Ticker</label>
+          <input id="inp-ticker" type="text" placeholder="PETR4" maxlength="8" />
+        </div>
+        <div class="form-group">
+          <label>Cotas (opcional)</label>
+          <input id="inp-qtd" type="number" placeholder="ex: 200" min="1" />
+        </div>
+        <div class="form-group">
+          <label>&nbsp;</label>
+          <button class="btn btn-add" onclick="addTicker()">+ Adicionar</button>
+        </div>
       </div>
-      <div class="form-group">
-        <label>Cotas (opcional)</label>
-        <input id="inp-qtd" type="number" placeholder="ex: 200" min="1" />
-      </div>
-      <div class="form-group">
-        <label>&nbsp;</label>
-        <button class="btn btn-add" onclick="addTicker()">+ Adicionar</button>
-      </div>
-      <div class="form-group" style="margin-left:auto">
-        <label>Ano</label>
-        <select id="sel-ano"></select>
+
+      <div id="ticker-list"></div>
+
+      <div style="margin-top:.5rem;font-size:.8rem;color:#64748b">
+        <span class="config-dot" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#6366f1;vertical-align:middle;margin-right:.3rem"></span>
+        Marcados com ponto roxo vieram do arquivo de configuração.
       </div>
     </div>
 
-    <div id="ticker-list"></div>
-
     <div style="margin-top:1rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
-      <button id="btn-buscar" class="btn btn-search" onclick="buscar()">Consultar</button>
+      <div class="form-group">
+        <label>Ano</label>
+        <select id="sel-ano"></select>
+      </div>
+      <div class="form-group" style="justify-content:flex-end">
+        <label>&nbsp;</label>
+        <button id="btn-buscar" class="btn btn-search" onclick="buscar()">Consultar</button>
+      </div>
       <span id="status"></span>
     </div>
   </div>
@@ -329,13 +375,46 @@
         });
         configSource = true;
         renderChips();
-        setStatus(`${ativos.length} ativo(s) carregado(s) do arquivo de configuração.`);
-        _configStatusTimer = setTimeout(() => setStatus(''), 4000);
+        renderSummary();       // mostra barra resumida, oculta painel
+      } else {
+        // Sem config: abre o painel diretamente
+        openEditor();
       }
-    } catch (_) { /* sem config, ignora */ }
+    } catch (_) {
+      openEditor();
+    }
   })();
 
   // ── Ticker list ────────────────────────────────────────────────────
+  function openEditor() {
+    document.getElementById('ticker-editor').classList.add('open');
+  }
+
+  function toggleEditor() {
+    const panel = document.getElementById('ticker-editor');
+    const btn   = document.getElementById('btn-edit-list');
+    const open  = panel.classList.toggle('open');
+    btn.textContent = open ? '✕ Fechar' : '✏️ Editar lista';
+  }
+
+  function renderSummary() {
+    const bar    = document.getElementById('config-summary');
+    const chips  = document.getElementById('summary-chips');
+    const editor = document.getElementById('ticker-editor');
+
+    if (configSource && ativos.length > 0) {
+      chips.innerHTML = ativos.map(a =>
+        `<span class="summary-chip">${a.ticker}${a.qtd ? ` ×${a.qtd.toLocaleString('pt-BR')}` : ''}</span>`
+      ).join('');
+      bar.style.display = 'flex';
+      editor.classList.remove('open');
+      document.getElementById('btn-edit-list').textContent = '✏️ Editar lista';
+    } else {
+      bar.style.display = 'none';
+      openEditor();
+    }
+  }
+
   function addTicker() {
     const ticker = document.getElementById('inp-ticker').value.trim().toUpperCase();
     const qtd    = parseInt(document.getElementById('inp-qtd').value) || 0;
@@ -347,6 +426,7 @@
     document.getElementById('inp-ticker').value = '';
     document.getElementById('inp-qtd').value    = '';
     renderChips();
+    if (configSource) renderSummary();
     setStatus('');
     document.getElementById('inp-ticker').focus();
   }
@@ -355,6 +435,7 @@
     const i = ativos.findIndex(a => a.ticker === ticker);
     if (i >= 0) ativos.splice(i, 1);
     renderChips();
+    if (configSource) renderSummary();
   }
 
   function renderChips() {
