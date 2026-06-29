@@ -273,6 +273,68 @@
       table { font-size: .72rem; }
       .matrix-table { min-width: 660px; }
     }
+
+    /* ── Landscape mobile (telefone deitado) ──────── */
+    /* Cobre iPhones e Androids típicos em landscape: ~568px–915px wide, altura < 500px */
+    @media (orientation: landscape) and (max-height: 500px) {
+      /* Header compacto */
+      header { padding: .5rem 1rem; }
+      header h1 { font-size: 1.1rem; }
+      header span { display: none; }   /* esconde subtítulo para ganhar espaço */
+
+      /* Menos padding geral */
+      main  { padding: .6rem .75rem; }
+      .card { padding: .75rem 1rem; margin-bottom: .75rem; }
+      .card h2 { margin-bottom: .6rem; }
+
+      /* Fonte da tabela menor */
+      table { font-size: .76rem; }
+      th    { padding: .4rem .55rem; }
+      td    { padding: .32rem .55rem; }
+
+      /* Meses vazios ocultos (reduz linhas na tabela detalhada) */
+      .empty-month { display: none; }
+
+      /* ── Matriz: sticky na 1.ª coluna + scroll horizontal ── */
+      .matrix-table {
+        table-layout: auto;
+        min-width: 680px;
+      }
+      .matrix-table th:first-child,
+      .matrix-table td:first-child {
+        position: sticky;
+        left: 0;
+        z-index: 2;
+        width: auto;
+        min-width: 90px;
+        max-width: 130px;
+        box-shadow: 2px 0 6px rgba(0,0,0,.08);
+        background: #fff;
+      }
+      .matrix-table thead th:first-child    { background: #1e293b; }
+      .matrix-table tfoot  td:first-child   { background: #0f172a; }
+      .matrix-subtotal     td:first-child   { background: #f8fafc !important; }
+      tr:hover td:first-child { background: #f0f9ff; }
+
+      .matrix-table th:not(:first-child):not(:last-child),
+      .matrix-table td:not(:first-child):not(:last-child) {
+        width: auto; min-width: 50px;
+      }
+      .matrix-table th:last-child,
+      .matrix-table td:last-child { width: auto; min-width: 62px; }
+
+      /* ── Tabela detalhada: colunas de data mais compactas ── */
+      .detail-table th,
+      .detail-table td { padding: .32rem .4rem; }
+      .detail-table td:nth-child(2),
+      .detail-table td:nth-child(3) { min-width: 70px; white-space: nowrap; }
+      .detail-table td:first-child  { min-width: 68px; white-space: nowrap; }
+
+      /* Form: linha única compacta */
+      .form-row { gap: .4rem; }
+      .form-group input[type="text"]   { width: 100px; }
+      .form-group input[type="number"] { width: 80px; }
+    }
   </style>
 </head>
 <body>
