@@ -38,6 +38,9 @@ python3 dividendos.py MXRF11:500 KNRI11 PETR4:200
 # Carregar tickers direto de um arquivo de configuração YAML
 python3 dividendos.py -c carteira.yaml
 
+# Consultar um ano específico
+python3 dividendos.py -c carteira.yaml -a 2025
+
 # Ajuda
 python3 dividendos.py --help
 ```
@@ -159,6 +162,10 @@ A aplicação web é uma **Progressive Web App (PWA)** e pode ser instalada no A
 
 ### Arquivo de configuração (`carteira.yaml`)
 
+O arquivo YAML suporta dois formatos: **formato simples** e **formato histórico** (com quantidade variável por mês/ano).
+
+#### Formato simples
+
 Crie um arquivo YAML baseado no exemplo `carteira.example.yaml`:
 
 ```yaml
@@ -174,6 +181,29 @@ ativos:
   - ticker: KNRI11
     qtd: 150
 ```
+
+#### Formato histórico (quantidade variável por mês/ano)
+
+Quando você compra ou vende cotas ao longo do tempo, use o formato histórico para registrar a quantidade correta em cada período. A quantidade é **propagada (carry-forward)**: cada entrada vale a partir daquele mês até a próxima alteração.
+
+```yaml
+PETR4:
+  2024:
+    jan: 100      # 100 ações de jan/2024 em diante
+    jun: 200      # comprou mais 100 em jun/2024
+  2025:
+    mar: 150      # vendeu 50 em mar/2025
+
+MXRF11:
+  2023:
+    jan: 500
+
+VALE3:            # sem quantidade: exibe apenas R$/cota
+  2024:
+    jan: 0
+```
+
+> Os dois formatos **não podem ser misturados** no mesmo arquivo. Use `ativos:` para o formato simples ou o formato histórico (sem a chave `ativos:`).
 
 Ao iniciar com `--config`, os ativos aparecem como uma barra resumida compacta — clique em **✏️ Editar lista** para expandir e modificar. Você ainda pode adicionar ou remover tickers manualmente via web.
 
