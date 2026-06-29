@@ -175,16 +175,26 @@ ativos:
     qtd: 150
 ```
 
-Ao iniciar com `--config`, os ativos aparecem pré-carregados na interface (marcados com um ponto roxo). Você ainda pode adicionar ou remover tickers manualmente via web.
+Ao iniciar com `--config`, os ativos aparecem como uma barra resumida compacta — clique em **✏️ Editar lista** para expandir e modificar. Você ainda pode adicionar ou remover tickers manualmente via web.
+
+### Cache e atualização de dados
+
+Os dados buscados do Status Invest são armazenados em cache local (`proventos_cache.json`) para evitar requisições repetidas:
+
+- **Consultar** — usa o cache se os dados tiverem menos de 24 horas. Caso contrário, busca automaticamente.
+- **🔄 Forçar atualização** — ignora o cache e busca dados frescos do Status Invest para todos os tickers.
+- **Refresh automático** — ao iniciar o servidor, uma thread em background verifica a cada hora se alguma entrada do cache expirou e a renova silenciosamente.
+- O badge no título do resultado indica a origem: 🟢 *atualizado agora* ou 📋 *DD/MM HH:MM* (hora do cache).
 
 ### Funcionalidades da interface web
 
 - Adicione tickers um a um com quantidade opcional (chips removíveis)
+- Quando `--config` é usado, a lista de tickers fica recolhida por padrão (botão **✏️ Editar lista** para expandir)
 - Selecione o ano de consulta
 - **Ticker único** → tabela detalhada mês a mês
-- **Múltiplos tickers** → tabela combinada (matriz) com totais mensais
-- Mensagens de erro para tickers inválidos
-- Responsivo para desktop e mobile
+- **Múltiplos tickers** → tabela combinada (matriz) com totais mensais e subtotais por grupo (FIIs / Ações)
+- Cache local com refresh automático diário e botão de atualização forçada
+- Responsivo para desktop, mobile (retrato e paisagem)
 
 ## Notas
 
