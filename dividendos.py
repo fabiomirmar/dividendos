@@ -380,6 +380,9 @@ def main():
         ativo  = ativos[0]
         ticker = ativo["ticker"]
         qtd_map = _get_qtd_map(ativo)
+        if all(v == 0 for v in qtd_map.values()):
+            print(f"  {ticker}: posição encerrada em {ano_atual}. Nenhum dado a exibir.")
+            return
         print(f"Buscando proventos de {ticker} para {ano_atual} via Status Invest...")
         try:
             proventos, tipo = buscar_proventos(ticker)
@@ -403,13 +406,17 @@ def main():
 
     for ativo in ativos:
         ticker = ativo["ticker"]
+        qtd_map_candidato = _get_qtd_map(ativo)
+        # Omite tickers sem posição no ano consultado (todos os meses = 0)
+        if all(v == 0 for v in qtd_map_candidato.values()):
+            continue
         print(f"  • {ticker} ... ", end="", flush=True)
         try:
             proventos, tipo = buscar_proventos(ticker)
             por_mes = agregar_por_mes(proventos, ano_atual)
             dados[ticker] = total_por_mes(por_mes)
             tipos[ticker] = tipo
-            qtd_maps[ticker] = _get_qtd_map(ativo)
+            qtd_maps[ticker] = qtd_map_candidato
             print("OK")
         except ValueError as e:
             print(f"ignorado ({e})")

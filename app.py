@@ -33,7 +33,7 @@ except ImportError:
 sys.path.insert(0, os.path.dirname(__file__))
 from core import buscar_proventos, agregar_por_mes, total_por_mes, MESES, MESES_CURTOS, INTER_REQ_DELAY
 import cache as _cache
-from carteira import parse_carteira, qtd_por_mes as _qtd_por_mes, resolver_qtd, qtd_display
+from carteira import parse_carteira, qtd_por_mes as _qtd_por_mes, resolver_qtd, qtd_display, tem_posicao_no_ano as _tem_posicao
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), "static"))
 app.secret_key = secrets.token_hex(32)
@@ -265,22 +265,24 @@ def api_proventos_stream():
         return f"data: {_json.dumps(payload, ensure_ascii=False)}\n\n"
 
     def generate():
-        total = sum(1 for a in ativos if a.get("ticker", "").strip())
-        idx   = 0
+        # Pré-resolve qtd_map por ticker e filtra posições zeradas no ano
+        ativos_filtrados = []
         for a in ativos:
             ticker = a.get("ticker", "").strip().upper()
-            qtd    = int(a.get("qtd") or 0)
             if not ticker:
                 continue
-            idx += 1
-
-            # Resolve quantidade: historico do config tem prioridade quando qtd não foi
-            # especificado manualmente pelo usuário (qtd == 0)
+            qtd = int(a.get("qtd") or 0)
             historico = _historico_idx.get(ticker)
             if historico and qtd == 0:
                 qtd_map = _qtd_por_mes(historico, ano)
+                if not _tem_posicao(historico, ano):
+                    continue   # sem posição neste ano — omite
             else:
-                qtd_map = qtd  # int fixo (ou 0 = sem quantidade)
+                qtd_map = qtd
+            ativos_filtrados.append((ticker, qtd_map))
+
+        total = len(ativos_filtrados)
+        for idx, (ticker, qtd_map) in enumerate(ativos_filtrados, 1):
 
             # Delay apenas quando vai buscar do Status Invest
             cached_check = _cache.get_fresh(ticker, ano) if not force_refresh else None

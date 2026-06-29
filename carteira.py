@@ -98,3 +98,8 @@ def qtd_display(historico: dict, ano: int) -> int | None:
     qtds = qtd_por_mes(historico, ano)
     valores = [v for v in qtds.values() if v > 0]
     return valores[-1] if valores else None
+
+
+def tem_posicao_no_ano(historico: dict, ano: int) -> bool:
+    """Retorna True se o ativo tem pelo menos um mês com quantidade > 0 no ano."""
+    return any(v > 0 for v in qtd_por_mes(historico, ano).values())
