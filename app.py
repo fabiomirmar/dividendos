@@ -33,11 +33,13 @@ except ImportError:
 sys.path.insert(0, os.path.dirname(__file__))
 from core import buscar_proventos, agregar_por_mes, total_por_mes, MESES, MESES_CURTOS, INTER_REQ_DELAY
 import cache as _cache
+from carteira import parse_carteira, qtd_por_mes as _qtd_por_mes, resolver_qtd, qtd_display
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), "static"))
 app.secret_key = secrets.token_hex(32)
 
-# Ativos pré-carregados do arquivo de configuração (lista de {ticker, qtd})
+# Ativos pré-carregados do arquivo de configuração
+# lista de {ticker, qtd, historico}
 app.config["ATIVOS_CONFIG"] = []
 app.config["PASSWORD"] = None  # None = sem proteção por senha
 
@@ -55,24 +57,23 @@ def _login_required(f):
 
 
 def _carregar_config(caminho: str) -> list[dict]:
-    """Lê um arquivo YAML de configuração e retorna lista de {ticker, qtd}."""
+    """Lê arquivo YAML (formato antigo ou novo) e retorna lista de {ticker, qtd, historico}."""
     if not _YAML_AVAILABLE:
         print("AVISO: pyyaml não está instalado. Execute: pip install pyyaml")
         return []
     with open(caminho, encoding="utf-8") as f:
         dados = yaml.safe_load(f)
-    ativos = []
-    for item in dados.get("ativos", []):
-        ticker = str(item.get("ticker", "")).strip().upper()
-        if not ticker:
-            continue
-        qtd = int(item.get("qtd") or 0)
-        ativos.append({"ticker": ticker, "qtd": qtd})
-    return ativos
+    return parse_carteira(dados)
 
 
-def _processar_ticker(ticker: str, qtd: int, ano: int, force_refresh: bool = False) -> dict:
-    """Busca e processa proventos de um ticker. Usa cache salvo em disco."""
+def _processar_ticker(ticker: str, qtd_map: dict | int, ano: int, force_refresh: bool = False) -> dict:
+    """
+    Busca e processa proventos de um ticker. Usa cache salvo em disco.
+
+    qtd_map pode ser:
+      - int: quantidade fixa para todos os meses
+      - dict {mes: qty}: quantidade variável por mês (carry-forward já resolvido)
+    """
     from_cache = False
     fetched_at = None
 
@@ -88,17 +89,35 @@ def _processar_ticker(ticker: str, qtd: int, ano: int, force_refresh: bool = Fal
     por_mes_detalhe = agregar_por_mes(proventos, ano)
     por_mes_total   = total_por_mes(por_mes_detalhe)
 
+    # Normaliza qtd_map: sempre {mes: qty} para uso uniforme
+    if isinstance(qtd_map, dict):
+        qtd_mes = qtd_map          # já resolvido por mês
+        qtd_fixo = None            # indica quantidade variável
+    else:
+        qtd_fixo = int(qtd_map or 0)
+        qtd_mes = {m: qtd_fixo for m in range(1, 13)}
+
     meses_data = []
+    total_ano_reais = 0.0
+    por_mes_reais = {}   # {mes: R$ já calculado com qtd do mês}
+
     for m in range(1, 13):
         pagamentos = por_mes_detalhe.get(m, [])
         grupos = {}
         for p in pagamentos:
             grupos.setdefault(p["data_pagamento"], []).append(p)
 
+        qtd = qtd_mes.get(m, 0)
         total_mes_bruto = sum(p["valor"] for p in pagamentos)
+        total_mes_reais = round(total_mes_bruto * qtd, 2) if qtd else None
+        if total_mes_reais:
+            total_ano_reais += total_mes_reais
+            por_mes_reais[m] = total_mes_reais
+
         meses_data.append({
             "mes":        m,
             "nome":       MESES[m - 1],
+            "qtd":        qtd,
             "grupos":     [
                 {
                     "data_pagamento": pgto,
@@ -117,19 +136,21 @@ def _processar_ticker(ticker: str, qtd: int, ano: int, force_refresh: bool = Fal
                 for pgto, itens in grupos.items()
             ],
             "total_bruto": round(total_mes_bruto, 6),
-            "total_reais": round(total_mes_bruto * qtd, 2) if qtd else None,
+            "total_reais": total_mes_reais,
         })
 
     total_ano_bruto = sum(por_mes_total.values())
     return {
         "ticker":          ticker.upper(),
         "tipo":            tipo,
-        "qtd":             qtd,
+        "qtd":             qtd_fixo,   # None quando variável
+        "qtd_variavel":    qtd_fixo is None and any(qtd_mes.values()),
         "ano":             ano,
         "meses":           meses_data,
         "total_ano_bruto": round(total_ano_bruto, 6),
-        "total_ano_reais": round(total_ano_bruto * qtd, 2) if qtd else None,
+        "total_ano_reais": round(total_ano_reais, 2) if total_ano_reais else None,
         "por_mes_total":   {m: round(v, 6) for m, v in por_mes_total.items()},
+        "por_mes_reais":   por_mes_reais,   # {mes: R$} pré-calculado
         "from_cache":      from_cache,
         "fetched_at":      fetched_at.isoformat(timespec="seconds") if fetched_at else None,
     }
@@ -163,8 +184,21 @@ def index():
 @app.route("/api/config")
 @_login_required
 def api_config():
-    """Retorna os ativos pré-carregados do arquivo de configuração."""
-    return jsonify({"ativos": app.config["ATIVOS_CONFIG"]})
+    """Retorna os ativos pré-carregados. Para o novo formato, inclui qtd resolvida para hoje."""
+    ano_hoje = date.today().year
+    mes_hoje = date.today().month
+    ativos_resp = []
+    for a in app.config["ATIVOS_CONFIG"]:
+        if a.get("historico"):
+            qtd_atual = resolver_qtd(a["historico"], ano_hoje, mes_hoje)
+        else:
+            qtd_atual = a.get("qtd", 0)
+        ativos_resp.append({
+            "ticker":    a["ticker"],
+            "qtd":       qtd_atual,
+            "variavel":  a.get("historico") is not None,
+        })
+    return jsonify({"ativos": ativos_resp})
 
 
 @app.route("/api/proventos", methods=["POST"])
@@ -218,6 +252,13 @@ def api_proventos_stream():
     ano     = int(body.get("ano", date.today().year))
     force_refresh = bool(body.get("force_refresh", False))
 
+    # Índice de historico por ticker (para o novo formato de carteira)
+    _historico_idx = {
+        a["ticker"]: a["historico"]
+        for a in app.config["ATIVOS_CONFIG"]
+        if a.get("historico")
+    }
+
     def _sse(payload: dict) -> str:
         return f"data: {_json.dumps(payload, ensure_ascii=False)}\n\n"
 
@@ -230,7 +271,16 @@ def api_proventos_stream():
             if not ticker:
                 continue
             idx += 1
-            # Delay entre requisições ao Status Invest apenas quando não vem do cache
+
+            # Resolve quantidade: historico do config tem prioridade quando qtd não foi
+            # especificado manualmente pelo usuário (qtd == 0)
+            historico = _historico_idx.get(ticker)
+            if historico and qtd == 0:
+                qtd_map = _qtd_por_mes(historico, ano)
+            else:
+                qtd_map = qtd  # int fixo (ou 0 = sem quantidade)
+
+            # Delay apenas quando vai buscar do Status Invest
             cached_check = _cache.get_fresh(ticker, ano) if not force_refresh else None
             if idx > 1 and not cached_check:
                 time.sleep(INTER_REQ_DELAY)
@@ -238,7 +288,7 @@ def api_proventos_stream():
             yield _sse({"type": "progress", "ticker": ticker, "index": idx, "total": total})
 
             try:
-                dados = _processar_ticker(ticker, qtd, ano, force_refresh=force_refresh)
+                dados = _processar_ticker(ticker, qtd_map, ano, force_refresh=force_refresh)
                 yield _sse({"type": "result", "data": dados})
             except (ValueError, TimeoutError, RuntimeError) as e:
                 yield _sse({"type": "error", "ticker": ticker, "erro": str(e)})

@@ -29,7 +29,13 @@ from core import (
 
 # ── Single-ticker detailed view ───────────────────────────────────────────────
 
-def exibir_resultado(ticker: str, tipo: str, por_mes: dict, ano: int, qtd: int = 0):
+def exibir_resultado(ticker: str, tipo: str, por_mes: dict, ano: int,
+                     qtd: int | dict = 0):
+    """
+    qtd pode ser:
+      - int: quantidade fixa para todos os meses
+      - dict {mes: qty}: quantidade variável por mês
+    """
     W_MES   = 11
     W_PGTO  = 10
     W_COM   = 10
@@ -37,7 +43,11 @@ def exibir_resultado(ticker: str, tipo: str, por_mes: dict, ano: int, qtd: int =
     W_VALOR = 12
     W_TOTAL = 12  # extra column when qtd is given
 
-    com_qtd = qtd > 0
+    qtd_variavel = isinstance(qtd, dict)
+    def _qtd(mes: int) -> int:
+        return qtd.get(mes, 0) if qtd_variavel else int(qtd)
+
+    com_qtd = qtd_variavel or int(qtd) > 0
     extra_header = f" │ {'Total (R$)':>{W_TOTAL}}" if com_qtd else ""
     extra_sep    = f"┼{'─'*(W_TOTAL+2)}" if com_qtd else ""
     extra_end    = f"┤" if com_qtd else ""
@@ -71,7 +81,7 @@ def exibir_resultado(ticker: str, tipo: str, por_mes: dict, ano: int, qtd: int =
 
     titulo = f"  Proventos de {ticker.upper()} ({tipo}) — {ano}"
     if com_qtd:
-        titulo += f"  ·  {qtd:,} cotas"
+        titulo += "  ·  quantidade variável" if qtd_variavel else f"  ·  {qtd:,} cotas"
     print(f"\n{titulo}\n")
     print(top)
     print(row("Mês", "Pagamento", "Data-com", "Tipo",
@@ -90,6 +100,7 @@ def exibir_resultado(ticker: str, tipo: str, por_mes: dict, ano: int, qtd: int =
 
         pagamentos = por_mes.get(mes, [])
         nome_mes = MESES[mes - 1]
+        qtd_m = _qtd(mes)
 
         if not pagamentos:
             print(row(nome_mes, "—"))
@@ -100,9 +111,10 @@ def exibir_resultado(ticker: str, tipo: str, por_mes: dict, ano: int, qtd: int =
             grupos.setdefault(p["data_pagamento"], []).append(p)
 
         total_mes_bruto = sum(p["valor"] for p in pagamentos)
-        total_mes       = total_mes_bruto * qtd if com_qtd else total_mes_bruto
+        total_mes       = total_mes_bruto * qtd_m if (com_qtd and qtd_m) else total_mes_bruto
         total_ano_bruto += total_mes_bruto
-        total_ano       += total_mes
+        if com_qtd and qtd_m:
+            total_ano += total_mes
 
         mes_impresso = False
         primeiro_grupo = True
@@ -117,17 +129,17 @@ def exibir_resultado(ticker: str, tipo: str, por_mes: dict, ano: int, qtd: int =
                 pgto_label = pgto_data if i == 0 else ""
                 com_label  = p["data_com"] if i == 0 else ""
                 mes_impresso = True
-                valor_total = f"{p['valor'] * qtd:.2f}" if com_qtd else ""
+                valor_total = f"{p['valor'] * qtd_m:.2f}" if (com_qtd and qtd_m) else ("×0" if com_qtd else "")
                 print(row(mes_label, pgto_label, com_label, p["tipo"],
                           f"{p['valor']:.6f}", valor_total))
 
             if len(itens) > 1:
                 sub_bruto = sum(p["valor"] for p in itens)
-                sub_total = f"{sub_bruto * qtd:.2f}" if com_qtd else ""
+                sub_total = f"{sub_bruto * qtd_m:.2f}" if (com_qtd and qtd_m) else ""
                 print(row("", "", "", "Subtotal", f"{sub_bruto:.6f}", sub_total))
 
         if len(grupos) > 1:
-            tm_total = f"{total_mes:.2f}" if com_qtd else f"{total_mes:.6f}"
+            tm_total = f"{total_mes:.2f}" if (com_qtd and qtd_m) else f"{total_mes_bruto:.6f}"
             print(row("", "", "", "─── Total mês ───",
                       f"{total_mes_bruto:.6f}", tm_total if com_qtd else ""))
 
@@ -147,22 +159,33 @@ def exibir_resultado(ticker: str, tipo: str, por_mes: dict, ano: int, qtd: int =
 def exibir_matriz(
     dados: dict[str, dict[int, float]],
     tipos: dict[str, str],
-    qtds: dict[str, int],
+    qtds: dict[str, dict | int],   # dict[mes,qty] ou int por ticker
     ano: int,
 ):
     """
     dados:  {ticker: {mes: total_valor_por_cota}}
     tipos:  {ticker: 'FII' | 'Ação'}
-    qtds:   {ticker: quantidade_de_cotas}  (0 = sem quantidade)
+    qtds:   {ticker: int | dict{mes:qty}}
     Exibe tabela com tickers nas linhas e meses nas colunas.
     Inclui subtotais por grupo (FIIs / Ações) quando ambos estão presentes.
     """
-    tickers   = list(dados.keys())
-    com_qtd   = any(qtds.get(t, 0) > 0 for t in tickers)
+    def _qtd_m(ticker, mes):
+        q = qtds.get(ticker, 0)
+        return q.get(mes, 0) if isinstance(q, dict) else int(q)
+
+    tickers = list(dados.keys())
+    com_qtd = any(
+        any(_qtd_m(t, m) > 0 for m in range(1, 13))
+        for t in tickers
+    )
 
     def _label(t):
         q = qtds.get(t, 0)
-        suffix = f" ×{q:,}" if q > 0 else ""
+        if isinstance(q, dict):
+            valores = [v for v in q.values() if v > 0]
+            suffix = f" ×var" if valores else ""
+        else:
+            suffix = f" ×{q:,}" if q > 0 else ""
         return f"{t} ({tipos.get(t, '')}){suffix}"
 
     labels = {t: _label(t) for t in tickers}
@@ -223,16 +246,16 @@ def exibir_matriz(
 
         for ticker in grupo_tickers:
             por_mes = dados[ticker]
-            qtd = qtds.get(ticker, 0)
             vals = []
             total_ticker = 0.0
             for m in range(1, 13):
-                v = por_mes.get(m)
-                val = (v * qtd if qtd > 0 else v) if v is not None else None
+                v   = por_mes.get(m)
+                qtd_m = _qtd_m(ticker, m)
+                val = (v * qtd_m if qtd_m > 0 else v) if v is not None else None
                 totais_mes[m]    += val or 0.0
                 subtotal_mes[m]  += val or 0.0
                 total_ticker     += val or 0.0
-                vals.append(_fmt(v, qtd))
+                vals.append(_fmt(v, qtd_m))
             total_ano_geral += total_ticker
             subtotal_ano    += total_ticker
             print(row(labels[ticker], vals, f"{total_ticker:.2f}"))
@@ -267,23 +290,21 @@ def _parse_arg(arg: str) -> tuple[str, int]:
     return arg.strip().upper(), 0
 
 
-def _carregar_config(caminho: str) -> list[tuple[str, int]]:
-    """Lê um arquivo YAML e retorna lista de (ticker, qtd)."""
+def _carregar_config(caminho: str) -> list[dict]:
+    """Lê arquivo YAML (formato antigo ou novo) e retorna lista de {ticker, qtd, historico}."""
     try:
         import yaml
     except ImportError:
         print("ERRO: pyyaml não está instalado. Execute: pip install pyyaml")
         sys.exit(1)
+    try:
+        from carteira import parse_carteira
+    except ImportError:
+        print("ERRO: módulo carteira.py não encontrado.")
+        sys.exit(1)
     with open(caminho, encoding="utf-8") as f:
         dados = yaml.safe_load(f)
-    resultado = []
-    for item in dados.get("ativos", []):
-        ticker = str(item.get("ticker", "")).strip().upper()
-        if not ticker:
-            continue
-        qtd = int(item.get("qtd") or 0)
-        resultado.append((ticker, qtd))
-    return resultado
+    return parse_carteira(dados)
 
 
 def main():
@@ -310,36 +331,55 @@ def main():
         metavar="ARQUIVO",
         help="Arquivo YAML com lista predefinida de ativos (tickers e cotas).",
     )
+    parser.add_argument(
+        "-a", "--ano",
+        type=int,
+        default=date.today().year,
+        metavar="ANO",
+        help=f"Ano a consultar (padrão: {date.today().year}).",
+    )
     args = parser.parse_args()
 
     if not args.tickers and not args.config:
         parser.print_help()
         sys.exit(1)
 
+    ano_atual = args.ano
+
     # Carregar tickers: do arquivo YAML ou dos argumentos posicionais
     if args.config:
         try:
-            parsed = _carregar_config(args.config)
+            ativos = _carregar_config(args.config)
         except FileNotFoundError:
             print(f"ERRO: arquivo não encontrado: {args.config}")
             sys.exit(1)
         except Exception as e:
             print(f"ERRO ao ler configuração: {e}")
             sys.exit(1)
-        if not parsed:
+        if not ativos:
             print(f"ERRO: nenhum ativo encontrado em {args.config}")
             sys.exit(1)
     else:
-        parsed = [_parse_arg(a) for a in args.tickers]
+        ativos = [
+            {"ticker": t, "qtd": q, "historico": None}
+            for t, q in (_parse_arg(a) for a in args.tickers)
+        ]
 
-    tickers = [t for t, _ in parsed]
-    qtds    = {t: q for t, q in parsed}
-    ano_atual = date.today().year
+    tickers = [a["ticker"] for a in ativos]
+
+    def _get_qtd_map(ativo: dict) -> dict:
+        """Retorna {mes: qty} para o ano consultado."""
+        if ativo.get("historico"):
+            from carteira import qtd_por_mes
+            return qtd_por_mes(ativo["historico"], ano_atual)
+        qtd = ativo.get("qtd", 0)
+        return {m: qtd for m in range(1, 13)}
 
     # ── Single ticker: detailed view ──────────────────────────────────────────
     if len(tickers) == 1:
-        ticker = tickers[0]
-        qtd    = qtds[ticker]
+        ativo  = ativos[0]
+        ticker = ativo["ticker"]
+        qtd_map = _get_qtd_map(ativo)
         print(f"Buscando proventos de {ticker} para {ano_atual} via Status Invest...")
         try:
             proventos, tipo = buscar_proventos(ticker)
@@ -351,22 +391,25 @@ def main():
             print(f"\n  Erro: {e}.\n  O site Status Invest pode estar fora do ar ou com lentidão.")
             sys.exit(1)
         por_mes = agregar_por_mes(proventos, ano_atual)
-        exibir_resultado(ticker, tipo, por_mes, ano_atual, qtd)
+        exibir_resultado(ticker, tipo, por_mes, ano_atual, qtd_map)
         return
 
     # ── Multiple tickers: matrix view ─────────────────────────────────────────
     print(f"Buscando proventos de {len(tickers)} ativos para {ano_atual} via Status Invest...\n")
     dados: dict[str, dict[int, float]] = {}
     tipos: dict[str, str] = {}
+    qtd_maps: dict[str, dict] = {}
     erros: list[str] = []
 
-    for ticker in tickers:
+    for ativo in ativos:
+        ticker = ativo["ticker"]
         print(f"  • {ticker} ... ", end="", flush=True)
         try:
             proventos, tipo = buscar_proventos(ticker)
             por_mes = agregar_por_mes(proventos, ano_atual)
             dados[ticker] = total_por_mes(por_mes)
             tipos[ticker] = tipo
+            qtd_maps[ticker] = _get_qtd_map(ativo)
             print("OK")
         except ValueError as e:
             print(f"ignorado ({e})")
@@ -382,7 +425,7 @@ def main():
         print("\n  Nenhum dado disponível para exibir.")
         sys.exit(1)
 
-    exibir_matriz(dados, tipos, qtds, ano_atual)
+    exibir_matriz(dados, tipos, qtd_maps, ano_atual)
 
 
 if __name__ == "__main__":

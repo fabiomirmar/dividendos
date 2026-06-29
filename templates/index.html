@@ -671,9 +671,11 @@
 
   // ── Detailed view ──────────────────────────────────────────────────
   function renderDetalhadoFlat(d) {
-    const comQtd = d.qtd > 0;
+    const comQtd = d.qtd > 0 || d.qtd_variavel;
     const badgeClass = d.tipo === 'FII' ? 'badge-fii' : 'badge-acao';
-    const qtdLabel = comQtd ? ` · ${d.qtd.toLocaleString('pt-BR')} cotas` : '';
+    const qtdLabel = d.qtd_variavel
+      ? ` · quantidade variável`
+      : (d.qtd > 0 ? ` · ${d.qtd.toLocaleString('pt-BR')} cotas` : '');
 
     let html = `<div class="result-section card">
       <div class="result-title">
@@ -689,14 +691,17 @@
           <th>Data-com</th>
           <th>Tipo</th>
           <th class="num">${comQtd ? 'R$/cota' : 'Valor (R$)'}</th>
+          ${comQtd ? `<th class="num">${d.qtd_variavel ? 'Cotas' : ''}</th>` : ''}
           ${comQtd ? '<th class="num">Total (R$)</th>' : ''}
         </tr></thead>
         <tbody>`;
 
     d.meses.forEach(m => {
+      const qtdMes = m.qtd || 0;
       if (!m.grupos.length) {
         html += `<tr class="empty-month">
           <td>${m.nome}</td><td colspan="3">—</td><td></td>
+          ${comQtd ? `<td>${d.qtd_variavel ? (qtdMes > 0 ? qtdMes.toLocaleString('pt-BR') : '—') : ''}</td>` : ''}
           ${comQtd ? '<td></td>' : ''}
         </tr>`;
         return;
@@ -714,6 +719,7 @@
                          <td rowspan="${g.itens.length + (g.itens.length > 1 ? 1 : 0)}">${g.data_com}</td>` : ''}
             <td>${item.tipo}</td>
             <td class="num">${fmt(item.valor, 6, true)}</td>
+            ${comQtd && d.qtd_variavel ? `<td class="num" style="color:#64748b;font-size:.8rem">${ii===0 && gi===0 ? (qtdMes > 0 ? '×'+qtdMes.toLocaleString('pt-BR') : '×0') : ''}</td>` : (comQtd ? '<td></td>' : '')}
             ${comQtd ? `<td class="num">${fmt(item.total, 2, true)}</td>` : ''}
           </tr>`;
           mesShown = true;
@@ -722,11 +728,12 @@
           html += `<tr class="subtotal-row">
             <td colspan="2">Subtotal</td>
             <td class="num">${fmt(g.subtotal, 6, true)}</td>
+            ${comQtd && d.qtd_variavel ? '<td></td>' : (comQtd ? '' : '')}
             ${comQtd ? `<td class="num">${fmt(g.subtotal_total, 2, true)}</td>` : ''}
           </tr>`;
         }
         if (gi < m.grupos.length - 1) {
-          html += `<tr><td colspan="${comQtd ? 4 : 3}" style="padding:2px;background:#f8fafc"></td></tr>`;
+          html += `<tr><td colspan="${comQtd ? (d.qtd_variavel ? 5 : 4) : 3}" style="padding:2px;background:#f8fafc"></td></tr>`;
         }
       });
 
@@ -734,6 +741,7 @@
         html += `<tr class="month-total-row">
           <td colspan="3">Total ${m.nome}</td>
           <td class="num">${fmt(m.total_bruto, 6, true)}</td>
+          ${comQtd && d.qtd_variavel ? '<td></td>' : (comQtd ? '' : '')}
           ${comQtd ? `<td class="num">${fmt(m.total_reais, 2, true)}</td>` : ''}
         </tr>`;
       }
@@ -741,9 +749,10 @@
 
     // Footer
     if (comQtd) {
+      const extraCol = d.qtd_variavel ? '<td></td>' : '';
       html += `
-        <tr class="total-label-row"><td colspan="4">Total ano (por cota)</td><td class="num">${fmt(d.total_ano_bruto, 6, true)}</td><td></td></tr>
-        <tr class="total-row"><td colspan="4">Total ano</td><td></td><td class="num">${fmt(d.total_ano_reais, 2, true)}</td></tr>`;
+        <tr class="total-label-row"><td colspan="4">Total ano (por cota)</td><td class="num">${fmt(d.total_ano_bruto, 6, true)}</td>${extraCol}<td></td></tr>
+        <tr class="total-row"><td colspan="4">Total ano</td><td></td>${extraCol}<td class="num">${fmt(d.total_ano_reais, 2, true)}</td></tr>`;
     } else {
       html += `<tr class="total-row"><td colspan="4">Total ano</td><td class="num">${fmt(d.total_ano_bruto, 6, true)}</td></tr>`;
     }
@@ -784,12 +793,24 @@
     // Helper: render one ticker row, accumulate into provided accumulators
     function renderTicker(d, acumMes, acumTotal) {
       const badgeClass = d.tipo === 'FII' ? 'badge-fii' : 'badge-acao';
-      const qtdSuffix  = d.qtd ? ` <span style="color:#94a3b8;font-size:.78rem">×${d.qtd.toLocaleString('pt-BR')}</span>` : '';
+      let qtdSuffix = '';
+      if (d.qtd_variavel) {
+        qtdSuffix = ` <span style="color:#94a3b8;font-size:.78rem" title="Quantidade varia por mês">×var</span>`;
+      } else if (d.qtd > 0) {
+        qtdSuffix = ` <span style="color:#94a3b8;font-size:.78rem">×${d.qtd.toLocaleString('pt-BR')}</span>`;
+      }
       let totalTicker  = 0;
       const cells = Array.from({ length: 12 }, (_, i) => {
-        const m   = i + 1;
-        const raw = d.por_mes_total[m];
-        const val = raw != null ? (d.qtd > 0 ? raw * d.qtd : raw) : null;
+        const m = i + 1;
+        // Usa por_mes_reais (pré-calculado) se disponível, senão multiplica por qtd fixo
+        let val = null;
+        if (d.por_mes_reais && d.por_mes_reais[m] != null) {
+          val = d.por_mes_reais[m];
+        } else if (d.por_mes_total[m] != null && d.qtd > 0) {
+          val = d.por_mes_total[m] * d.qtd;
+        } else if (!d.qtd_variavel && !d.qtd && d.por_mes_total[m] != null) {
+          val = d.por_mes_total[m];  // sem quantidade: mostra R$/cota
+        }
         if (val != null) { acumMes[i] += val; totaisMes[i] += val; totalTicker += val; }
         return val != null ? `<td class="num">${fmt(val, 2, true)}</td>` : `<td class="num" style="color:#cbd5e1">—</td>`;
       });
