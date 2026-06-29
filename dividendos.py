@@ -5,13 +5,16 @@ Consulta proventos (dividendos/JCP/rendimentos) de ações e FIIs via Status Inv
 Uso:
   python3 dividendos.py <TICKER>              — visão detalhada de um ativo
   python3 dividendos.py <TICKER> [TICKER ...] — tabela combinada de múltiplos ativos
+  python3 dividendos.py -c carteira.yaml      — carrega tickers do arquivo de configuração
 
 Exemplos:
   python3 dividendos.py PETR4
   python3 dividendos.py MXRF11 KNRI11 PETR4
+  python3 dividendos.py -c carteira.yaml
 """
 
 import sys
+import argparse
 from datetime import date
 from collections import defaultdict
 
@@ -248,42 +251,6 @@ def exibir_matriz(
 
 # ── Entry point ────────────────────────────────────────────────────────────────
 
-HELP = """\
-uso: dividendos.py [-h] TICKER[:COTAS] [TICKER[:COTAS] ...]
-
-Consulta proventos (dividendos, JCP, rendimentos) de ações e FIIs
-brasileiros via Status Invest, para o ano corrente.
-
-argumentos posicionais:
-  TICKER              código do ativo na B3 (ex: PETR4, MXRF11, KNRI11)
-  TICKER:COTAS        ticker com quantidade de cotas; multiplica o valor
-                      do provento pelo número de cotas informado
-
-opções:
-  -h, --help          exibe esta ajuda e encerra
-
-exemplos:
-  # visão detalhada de um único ativo
-  python3 dividendos.py PETR4
-
-  # visão detalhada com quantidade de cotas
-  python3 dividendos.py PETR4:200
-
-  # tabela combinada sem quantidades
-  python3 dividendos.py MXRF11 KNRI11 PETR4
-
-  # tabela combinada com quantidades
-  python3 dividendos.py MXRF11:500 KNRI11:100 PETR4:200
-
-  # mix: alguns com quantidade, outros sem
-  python3 dividendos.py MXRF11:500 KNRI11 PETR4:200
-
-notas:
-  - Ações e FIIs são detectados automaticamente.
-  - Tickers inválidos são ignorados na visão combinada.
-  - Fonte dos dados: https://statusinvest.com.br
-"""
-
 
 def _parse_arg(arg: str) -> tuple[str, int]:
     """'PETR4:200' → ('PETR4', 200),  'PETR4' → ('PETR4', 0)"""
@@ -300,16 +267,73 @@ def _parse_arg(arg: str) -> tuple[str, int]:
     return arg.strip().upper(), 0
 
 
+def _carregar_config(caminho: str) -> list[tuple[str, int]]:
+    """Lê um arquivo YAML e retorna lista de (ticker, qtd)."""
+    try:
+        import yaml
+    except ImportError:
+        print("ERRO: pyyaml não está instalado. Execute: pip install pyyaml")
+        sys.exit(1)
+    with open(caminho, encoding="utf-8") as f:
+        dados = yaml.safe_load(f)
+    resultado = []
+    for item in dados.get("ativos", []):
+        ticker = str(item.get("ticker", "")).strip().upper()
+        if not ticker:
+            continue
+        qtd = int(item.get("qtd") or 0)
+        resultado.append((ticker, qtd))
+    return resultado
+
+
 def main():
-    args = sys.argv[1:]
+    parser = argparse.ArgumentParser(
+        prog="dividendos.py",
+        description="Consulta proventos de ações e FIIs via Status Invest.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "exemplos:\n"
+            "  python3 dividendos.py PETR4\n"
+            "  python3 dividendos.py PETR4:200\n"
+            "  python3 dividendos.py MXRF11:500 KNRI11:100 PETR4:200\n"
+            "  python3 dividendos.py -c carteira.yaml\n"
+        ),
+    )
+    parser.add_argument(
+        "tickers",
+        nargs="*",
+        metavar="TICKER[:COTAS]",
+        help="Ticker(s) a consultar, com quantidade de cotas opcional (ex: PETR4:200).",
+    )
+    parser.add_argument(
+        "-c", "--config",
+        metavar="ARQUIVO",
+        help="Arquivo YAML com lista predefinida de ativos (tickers e cotas).",
+    )
+    args = parser.parse_args()
 
-    if not args or any(a in ("-h", "--help") for a in args):
-        print(HELP)
-        sys.exit(0 if args else 1)
+    if not args.tickers and not args.config:
+        parser.print_help()
+        sys.exit(1)
 
-    parsed   = [_parse_arg(a) for a in args]
-    tickers  = [t for t, _ in parsed]
-    qtds     = {t: q for t, q in parsed}
+    # Carregar tickers: do arquivo YAML ou dos argumentos posicionais
+    if args.config:
+        try:
+            parsed = _carregar_config(args.config)
+        except FileNotFoundError:
+            print(f"ERRO: arquivo não encontrado: {args.config}")
+            sys.exit(1)
+        except Exception as e:
+            print(f"ERRO ao ler configuração: {e}")
+            sys.exit(1)
+        if not parsed:
+            print(f"ERRO: nenhum ativo encontrado em {args.config}")
+            sys.exit(1)
+    else:
+        parsed = [_parse_arg(a) for a in args.tickers]
+
+    tickers = [t for t, _ in parsed]
+    qtds    = {t: q for t, q in parsed}
     ano_atual = date.today().year
 
     # ── Single ticker: detailed view ──────────────────────────────────────────

@@ -35,6 +35,9 @@ python3 dividendos.py MXRF11:500 KNRI11:100 PETR4:200
 # Mix: alguns com quantidade, outros sem
 python3 dividendos.py MXRF11:500 KNRI11 PETR4:200
 
+# Carregar tickers direto de um arquivo de configuração YAML
+python3 dividendos.py -c carteira.yaml
+
 # Ajuda
 python3 dividendos.py --help
 ```
