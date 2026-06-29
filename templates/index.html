@@ -427,9 +427,10 @@
   // ── Init ───────────────────────────────────────────────────────────
   const anoAtual = {{ ano }};
   const sel = document.getElementById('sel-ano');
-  for (let y = anoAtual; y >= anoAtual - 5; y--) {
+  for (let y = anoAtual + 2; y >= anoAtual - 5; y--) {
     const o = document.createElement('option');
     o.value = y; o.textContent = y;
+    if (y === anoAtual) o.selected = true;
     sel.appendChild(o);
   }
 
