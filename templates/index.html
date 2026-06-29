@@ -105,6 +105,16 @@
     }
     #btn-edit-list:hover { background: #f1f5f9; color: #334155; }
 
+    /* ── Cache badge ──────────────────────────────── */
+    .cache-badge {
+      display: inline-flex; align-items: center; gap: .3rem;
+      font-size: .75rem; color: #64748b;
+      background: #f1f5f9; border: 1px solid #e2e8f0;
+      border-radius: 10px; padding: .1rem .5rem;
+      white-space: nowrap;
+    }
+    .cache-badge.live { background: #dcfce7; border-color: #86efac; color: #166534; }
+
     /* ── Collapsible ticker editor panel ─────────── */
     #ticker-editor {
       overflow: hidden;
@@ -392,7 +402,14 @@
       </div>
       <div class="form-group" style="justify-content:flex-end">
         <label>&nbsp;</label>
-        <button id="btn-buscar" class="btn btn-search" onclick="buscar()">Consultar</button>
+        <button id="btn-buscar" class="btn btn-search" onclick="buscar(false)">Consultar</button>
+      </div>
+      <div class="form-group">
+        <label>&nbsp;</label>
+        <button id="btn-refresh" class="btn" style="background:#0f3460;color:#e0e0e0;padding:.55rem 1rem;font-size:.88rem"
+                onclick="buscar(true)" title="Ignora o cache e busca dados atualizados do Status Invest">
+          🔄 Forçar atualização
+        </button>
       </div>
       <span id="status"></span>
     </div>
@@ -513,15 +530,17 @@
   }
 
   // ── Search (streaming) ─────────────────────────────────────────────
-  async function buscar() {
+  async function buscar(forceRefresh = false) {
     if (!ativos.length) { setStatus('Adicione ao menos um ticker.'); return; }
 
     // Cancela o timer da mensagem de config para não interferir
     if (_configStatusTimer) { clearTimeout(_configStatusTimer); _configStatusTimer = null; }
 
-    const btn   = document.getElementById('btn-buscar');
+    const btnBuscar  = document.getElementById('btn-buscar');
+    const btnRefresh = document.getElementById('btn-refresh');
     const total = ativos.length;
-    btn.disabled = true;
+    btnBuscar.disabled  = true;
+    btnRefresh.disabled = true;
     document.getElementById('results').innerHTML = '';
 
     const ano = parseInt(document.getElementById('sel-ano').value);
@@ -535,7 +554,7 @@
       const resp = await fetch('/api/proventos/stream', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ ativos, ano }),
+        body:    JSON.stringify({ ativos, ano, force_refresh: forceRefresh }),
       });
 
       const reader  = resp.body.getReader();
@@ -560,7 +579,7 @@
           if (ev.type === 'progress') {
             setStatus(
               `<span class="spinner"></span>` +
-              `Consultando <b>${ev.ticker}</b>` +
+              `${forceRefresh ? 'Atualizando' : 'Consultando'} <b>${ev.ticker}</b>` +
               (total > 1 ? ` <span style="color:#94a3b8">(${ev.index} de ${ev.total})</span>` : '') +
               `…`
             );
@@ -580,7 +599,8 @@
     } catch (err) {
       setStatus('Erro ao conectar com o servidor.');
     } finally {
-      btn.disabled = false;
+      btnBuscar.disabled  = false;
+      btnRefresh.disabled = false;
     }
   }
 
@@ -625,6 +645,29 @@
     el.innerHTML = html;
   }
 
+  function _cacheBadge(d) {
+    if (!d.fetched_at) return `<span class="cache-badge live">🟢 atualizado agora</span>`;
+    const dt = new Date(d.fetched_at);
+    const fmt = dt.toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+    return `<span class="cache-badge" title="Dados em cache desde ${fmt}">📋 ${fmt}</span>`;
+  }
+
+  function _cachesBadgeMatriz(resultados) {
+    const allLive = resultados.every(d => !d.fetched_at);
+    if (allLive) return `<span class="cache-badge live">🟢 atualizado agora</span>`;
+    const oldest = resultados.reduce((min, d) => {
+      if (!d.fetched_at) return min;
+      return (!min || d.fetched_at < min) ? d.fetched_at : min;
+    }, null);
+    if (!oldest) return `<span class="cache-badge live">🟢 atualizado agora</span>`;
+    const dt = new Date(oldest);
+    const fmt = dt.toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+    const mixed = resultados.some(d => !d.fetched_at);
+    return mixed
+      ? `<span class="cache-badge" title="Alguns dados atualizados agora, outros em cache">📋 parcialmente em cache</span>`
+      : `<span class="cache-badge" title="Cache mais antigo: ${fmt}">📋 cache de ${fmt}</span>`;
+  }
+
   // ── Detailed view ──────────────────────────────────────────────────
   function renderDetalhadoFlat(d) {
     const comQtd = d.qtd > 0;
@@ -636,6 +679,7 @@
         ${d.ticker}
         <span class="badge ${badgeClass}">${d.tipo}</span>
         <span style="font-weight:400;color:#64748b;font-size:.9rem">${d.ano}${qtdLabel}</span>
+        ${_cacheBadge(d)}
       </div>
       <div class="tbl-wrap"><table class="detail-table">
         <thead><tr>
@@ -723,6 +767,7 @@
       <div class="result-title">
         Proventos combinados
         <span style="font-weight:400;color:#64748b;font-size:.9rem">${ano}${comQtd ? ' · valores em R$ considerando as cotas informadas' : ''}</span>
+        ${_cachesBadgeMatriz(resultados)}
       </div>
       <div class="tbl-wrap"><table class="matrix-table">
         <thead><tr>

@@ -16,6 +16,7 @@ import sys
 import os
 import time
 import argparse
+import threading
 from datetime import date
 import base64
 import secrets
@@ -31,6 +32,7 @@ except ImportError:
 # Allow importing core from the same directory
 sys.path.insert(0, os.path.dirname(__file__))
 from core import buscar_proventos, agregar_por_mes, total_por_mes, MESES, MESES_CURTOS, INTER_REQ_DELAY
+import cache as _cache
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), "static"))
 app.secret_key = secrets.token_hex(32)
@@ -69,9 +71,20 @@ def _carregar_config(caminho: str) -> list[dict]:
     return ativos
 
 
-def _processar_ticker(ticker: str, qtd: int, ano: int) -> dict:
-    """Busca e processa proventos de um ticker. Retorna um dict com os dados."""
-    proventos, tipo = buscar_proventos(ticker)
+def _processar_ticker(ticker: str, qtd: int, ano: int, force_refresh: bool = False) -> dict:
+    """Busca e processa proventos de um ticker. Usa cache salvo em disco."""
+    from_cache = False
+    fetched_at = None
+
+    cached = None if force_refresh else _cache.get_fresh(ticker, ano)
+    if cached:
+        proventos, tipo, fetched_at = cached
+        from_cache = True
+    else:
+        proventos, tipo = buscar_proventos(ticker)
+        _cache.put(ticker, ano, proventos, tipo)
+        fetched_at = None  # acabou de buscar
+
     por_mes_detalhe = agregar_por_mes(proventos, ano)
     por_mes_total   = total_por_mes(por_mes_detalhe)
 
@@ -117,6 +130,8 @@ def _processar_ticker(ticker: str, qtd: int, ano: int) -> dict:
         "total_ano_bruto": round(total_ano_bruto, 6),
         "total_ano_reais": round(total_ano_bruto * qtd, 2) if qtd else None,
         "por_mes_total":   {m: round(v, 6) for m, v in por_mes_total.items()},
+        "from_cache":      from_cache,
+        "fetched_at":      fetched_at.isoformat(timespec="seconds") if fetched_at else None,
     }
 
 
@@ -201,6 +216,7 @@ def api_proventos_stream():
     body    = request.get_json(force=True)
     ativos  = body.get("ativos", [])
     ano     = int(body.get("ano", date.today().year))
+    force_refresh = bool(body.get("force_refresh", False))
 
     def _sse(payload: dict) -> str:
         return f"data: {_json.dumps(payload, ensure_ascii=False)}\n\n"
@@ -214,13 +230,15 @@ def api_proventos_stream():
             if not ticker:
                 continue
             idx += 1
-            if idx > 1:
+            # Delay entre requisições ao Status Invest apenas quando não vem do cache
+            cached_check = _cache.get_fresh(ticker, ano) if not force_refresh else None
+            if idx > 1 and not cached_check:
                 time.sleep(INTER_REQ_DELAY)
 
             yield _sse({"type": "progress", "ticker": ticker, "index": idx, "total": total})
 
             try:
-                dados = _processar_ticker(ticker, qtd, ano)
+                dados = _processar_ticker(ticker, qtd, ano, force_refresh=force_refresh)
                 yield _sse({"type": "result", "data": dados})
             except (ValueError, TimeoutError, RuntimeError) as e:
                 yield _sse({"type": "error", "ticker": ticker, "erro": str(e)})
@@ -235,6 +253,55 @@ def api_proventos_stream():
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@app.route("/api/cache/status")
+@_login_required
+def api_cache_status():
+    """Retorna informações sobre o cache atual."""
+    return jsonify(_cache.status())
+
+
+@app.route("/api/cache/invalidate", methods=["POST"])
+@_login_required
+def api_cache_invalidate():
+    """
+    Invalida entradas do cache.
+    Body (opcional): {"tickers": ["PETR4", "MXRF11"], "ano": 2026}
+    Sem body: invalida todo o cache.
+    """
+    body    = request.get_json(force=True) or {}
+    tickers = body.get("tickers")
+    ano     = int(body.get("ano", date.today().year))
+    if tickers:
+        for t in tickers:
+            _cache.invalidate(t.strip().upper(), ano)
+        return jsonify({"invalidated": tickers})
+    _cache.invalidate()
+    return jsonify({"invalidated": "all"})
+
+
+# ── Background daily refresh ───────────────────────────────────────────────────
+
+def _bg_refresh():
+    """Verifica a cada hora se há entradas expiradas e as atualiza em background."""
+    ano = date.today().year
+    stale = _cache.stale_keys()
+    if stale:
+        print(f"[cache] Atualizando {len(stale)} entrada(s) expirada(s)...")
+        for key in stale:
+            ticker, ano_str = key.split(":", 1)
+            try:
+                proventos, tipo = buscar_proventos(ticker)
+                _cache.put(ticker, int(ano_str), proventos, tipo)
+                print(f"[cache] {ticker}:{ano_str} atualizado.")
+                time.sleep(INTER_REQ_DELAY)
+            except Exception as e:
+                print(f"[cache] Erro ao atualizar {ticker}: {e}")
+    # Reagenda para daqui a 1 hora
+    t = threading.Timer(3600, _bg_refresh)
+    t.daemon = True
+    t.start()
 
 
 if __name__ == "__main__":
@@ -294,4 +361,5 @@ if __name__ == "__main__":
             sys.exit(1)
 
     print(f"Iniciando servidor em http://localhost:{args.port}")
+    _bg_refresh()   # inicia o loop de refresh automático (daemon thread)
     app.run(host="0.0.0.0", port=args.port, debug=False, threaded=True)
